@@ -8,7 +8,7 @@ import rapid from '@/assets/images/rapid.png';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '@/components/context/authContext';
 
-const API_URL = "http://192.168.0.11:8080"
+const API_URL = "http://172.16.0.132:8080"
 
 
 const styles = StyleSheet.create({
@@ -91,6 +91,58 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
+const RecentGameCard = () => {
+  const recentGames = [
+    { id: '1', type: 'bullet', opponent: 'Koby', rating: 1304 },
+    { id: '2', type: 'rapid', opponent: 'Alex', rating: 1250 },
+    { id: '3', type: 'bullet', opponent: 'Maria', rating: 1375 },
+  ];
+
+  const getGameTypeImage = (type) => {
+    switch(type) {
+      case 'bullet': return bullet;
+      case 'rapid': return rapid;
+      default: return bullet;
+    }
+  };
+
+  return (
+    <View style={styles.cardContainer}>
+      <View style={{flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16}}>
+        <Text style={styles.cardTitle}>Recent Games</Text>
+        <TouchableOpacity>
+          <Text style={{color: '#4CAF50', textDecorationLine: 'underline'}}>See All</Text>
+        </TouchableOpacity>
+      </View>
+
+      {recentGames.map((game) => (
+        <View key={game.id} style={styles.recentGameRow}>
+          <View style={styles.recentGamePlayer}>
+            <Image source={getGameTypeImage(game.type)} style={{width: 30, height: 30, marginRight: 12}} />
+            <View>
+              <Text style={styles.playerName}>{game.opponent} ({game.rating})</Text>
+            </View>
+          </View>
+          <View style={{flexDirection: 'row', alignItems: 'center'}}>
+            <View style={{
+              width: 30, 
+              height: 30, 
+              borderRadius: 15, 
+              backgroundColor: '#FF5252', 
+              justifyContent: 'center', 
+              alignItems: 'center',
+              marginRight: 8
+            }}>
+              <Text style={{color: 'white', fontWeight: 'bold'}}>-</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+};
 
 const GameModeCard = () => {
   const [selectedTime, setSelectedTime] = useState(10 * 60);
@@ -220,65 +272,15 @@ const StatsCard = () => {
   );
 };
 
-const RecentGameCard = () => {
-  const recentGames = [
-    { id: '1', type: 'bullet', opponent: 'Koby', rating: 1304 },
-    { id: '2', type: 'rapid', opponent: 'Alex', rating: 1250 },
-    { id: '3', type: 'bullet', opponent: 'Maria', rating: 1375 },
-  ];
 
-  const getGameTypeImage = (type) => {
-    switch(type) {
-      case 'bullet': return bullet;
-      case 'rapid': return rapid;
-      default: return bullet;
-    }
-  };
-
-  return (
-    <View style={styles.cardContainer}>
-      <View style={{flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16}}>
-        <Text style={styles.cardTitle}>Recent Games</Text>
-        <TouchableOpacity>
-          <Text style={{color: '#4CAF50', textDecorationLine: 'underline'}}>See All</Text>
-        </TouchableOpacity>
-      </View>
-
-      {recentGames.map((game) => (
-        <View key={game.id} style={styles.recentGameRow}>
-          <View style={styles.recentGamePlayer}>
-            <Image source={getGameTypeImage(game.type)} style={{width: 30, height: 30, marginRight: 12}} />
-            <View>
-              <Text style={styles.playerName}>{game.opponent} ({game.rating})</Text>
-            </View>
-          </View>
-          <View style={{flexDirection: 'row', alignItems: 'center'}}>
-            <View style={{
-              width: 30, 
-              height: 30, 
-              borderRadius: 15, 
-              backgroundColor: '#FF5252', 
-              justifyContent: 'center', 
-              alignItems: 'center',
-              marginRight: 8
-            }}>
-              <Text style={{color: 'white', fontWeight: 'bold'}}>-</Text>
-            </View>
-            <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
-          </View>
-        </View>
-      ))}
-    </View>
-  );
-};
 
 export default function Home() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <StatsCard />
-        <GameModeCard />
         <RecentGameCard />
+        <GameModeCard />
       </ScrollView>
     </SafeAreaView>
   );
