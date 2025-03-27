@@ -7,8 +7,10 @@ import bullet from '@/assets/images/bullet.png';
 import rapid from '@/assets/images/rapid.png';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '@/components/context/authContext';
+import { EXPO_PUBLIC_API_URL } from '@env';
+import { Redirect } from 'expo-router';
 
-const API_URL = "http://192.168.0.11:8080"
+const API_URL = EXPO_PUBLIC_API_URL
 
 
 const styles = StyleSheet.create({
@@ -154,6 +156,12 @@ const GameModeCard = () => {
 const StatsCard = () => {
   const [profile, setProfile] = useState(null);
     const auth = useContext(AuthContext);
+    const userId = useContext(AuthContext);
+
+    if (!userId) {
+      return <Redirect href="/auth" />;
+    }
+  
 
     
   

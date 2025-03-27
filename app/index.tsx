@@ -1,39 +1,54 @@
 import { Redirect } from 'expo-router';
 import React, { useState, useEffect, useContext } from 'react';
 import { View, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '@/components/context/authContext';
 
 export default function Index() {
-  const { userId } = useContext(AuthContext);
-  const [isReady, setIsReady] = useState(false);
+  const { userId, token } = useContext(AuthContext);
+  const [isChecking, setIsChecking] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const prepare = async () => {
+    const checkAuth = async () => {
       try {
-        // Simulate a short delay (e.g., fetching user session)
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        const storedUserId = await AsyncStorage.getItem("userId");
+        const storedToken = await AsyncStorage.getItem("token");
+        const storedTimestamp = await AsyncStorage.getItem("loginTimestamp");
+
+        if (storedUserId && storedToken && storedTimestamp) {
+          const loginTime = parseInt(storedTimestamp, 10);
+          const currentTime = Date.now();
+          const twentyFourHours = 24 * 60 * 60 * 1000;
+
+          if (currentTime - loginTime < twentyFourHours) {
+            setIsAuthenticated(true);
+          }
+        }
       } catch (error) {
-        console.warn(error);
+        console.warn("Error checking authentication:", error);
       } finally {
-        setIsReady(true);
+        setIsChecking(false);
       }
     };
 
-    prepare();
+    checkAuth();
   }, []);
 
-  if (!isReady) {
+  if (isChecking) {
     return (
-      <View style={{ 
-        flex: 1, 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        backgroundColor: '#121212' 
-      }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#121212",
+        }}
+      >
         <ActivityIndicator size="large" color="#4CAF50" />
       </View>
     );
   }
 
-  return <Redirect href={"/auth"} />;
+  return <Redirect href={isAuthenticated ? "/home" : "/auth"} />;
 }

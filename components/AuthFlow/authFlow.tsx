@@ -3,14 +3,16 @@ import { View, Text, TextInput, TouchableOpacity, Image, Alert, ScrollView, Acti
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { AuthContext } from "@/components/context/authContext";
 import axios from "axios";
-import authpic from "@/assets/images/auth-picture.png";
+// import authpic from "@/assets/images/auth-picture.png";
 import logo from "@/assets/images/logo-icon.png";
 import { NavigationProp } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { EXPO_PUBLIC_API_URL } from "@env";
 
 
-const API_URL = "http://192.168.0.11:8080"
+
+const API_URL = EXPO_PUBLIC_API_URL
 
 export default function AuthFlow() {
     const auth = useContext(AuthContext);
