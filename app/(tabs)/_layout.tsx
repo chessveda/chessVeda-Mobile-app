@@ -43,6 +43,14 @@ export default function Layout() {
           )
         }} 
       />
+      <Tabs.Screen 
+  name="gameScreen" 
+  options={{ 
+    tabBarButton: () => null, // Hide from tab bar
+    tabBarLabel: '',
+    tabBarIcon: ({ color, size }) => null
+  }} 
+/>
     </Tabs>
   );
 }

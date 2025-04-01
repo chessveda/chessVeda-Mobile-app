@@ -20,10 +20,11 @@ import {
   VictoryTheme,
   VictoryAxis,
 } from "victory-native";
+import { EXPO_PUBLIC_API_URL } from "@env";
 
 const { width } = Dimensions.get("window");
 
-const API_URL = "http://172.16.0.132:8080"
+const API_URL = EXPO_PUBLIC_API_URL
 
 
 const Profile = () => {
