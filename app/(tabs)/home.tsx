@@ -5,32 +5,50 @@ import axios from 'axios';
 import human from '@/assets/images/human.png';
 import bullet from '@/assets/images/bullet.png';
 import rapid from '@/assets/images/rapid.png';
+import logo from "@/assets/images/logo-icon.png";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '@/components/context/authContext';
 
-const API_URL = "http://172.16.0.132:8080"
+const API_URL = "http://172.16.0.102:8080"
 
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212', // Dark background similar to web version
+    backgroundColor: '#000',
   },
   scrollContainer: {
     paddingHorizontal: 16,
     paddingTop: 20,
   },
+  logo: {
+    height: 70,
+    width: 45,
+    borderRadius: 25,
+  },
   cardContainer: {
-    backgroundColor: '#1E1E1E', // Overlay dark color
+    backgroundColor: '#000',
     borderRadius: 12,
-    padding: 16,
     marginBottom: 16,
   },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    
+  },
+  profileContainer: {
+    flexDirection: 'row',
+    
+  },
+  
   cardTitle: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: '400',
     color: '#FFFFFF',
-    marginBottom: 8,
+    marginTop:18,
+    marginLeft:10
   },
   cardSubtitle: {
     color: '#888888',
@@ -57,46 +75,160 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     width: '30%',
-    alignItems: 'center',
+    height:90,
+    paddingVertical:25,
+    paddingHorizontal:30,
   },
   statNumber: {
-    fontSize: 20,
+    fontSize: 25,
     fontWeight: '700',
     color: '#FFFFFF',
   },
   statLabel: {
     color: '#888888',
     marginTop: 4,
+    fontSize:12
   },
   recentGameRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#3D3D3D',
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2A2A',
+    marginHorizontal: -12,
+    paddingHorizontal: 12,
   },
+
   recentGamePlayer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
-  playerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 8,
-  },
+  
   playerName: {
     color: '#FFFFFF',
     fontSize: 16,
+    fontWeight: '500',
+  },
+
+  gameTypeImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+    marginRight: 8, // Reduced spacing between elements
+  },
+
+  playerAvatar: {
+    width: 40,
+    height: 40,
+    marginRight: 8, // Reduced spacing
+  },
+
+  ratingText: {
+    color: '#888888',
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  resultContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  resultIndicator: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+
+  seeAllButton: {
+    padding: 4,
+  },
+  seeAllText: {
+    color: '#4CAF50',
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
 });
 
+
+const StatsCard = () => {
+  const [profile, setProfile] = useState(null);
+  const auth = useContext(AuthContext);
+
+  useEffect(() => {
+    if (!auth.userId) {
+      console.log("User ID is still null, waiting...");
+      return;
+    }
+
+    const fetchProfile = async () => {
+      try {
+        console.log("Fetching profile for userId:", auth.userId);
+        const response = await axios.get(
+          `${API_URL}/api/profile/${auth.userId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${auth.token}`,
+            },
+          }
+        );
+        setProfile(response.data.user);
+        console.log("Profile data:", response.data.user);
+      } catch (err) {
+        console.log("Profile fetch error:", err);
+      }
+    };
+
+    fetchProfile();
+  }, [auth.userId]);
+
+  return (
+    <View style={styles.cardContainer}>
+      <View style={styles.headerContainer}>
+        <View style={styles.profileContainer}>
+          <Ionicons 
+            name="person-circle" 
+            size={50} 
+            color="#808080" 
+            style={styles.playerAvatar}
+          />
+          <Text style={styles.cardTitle}>
+            {profile ? `Hello, ${profile.name}` : 'Hello, There'}
+          </Text>
+        </View>
+        <Image source={logo} style={styles.logo} />
+      </View>
+
+      <Text style={{color: '#888888', marginTop: 10}}>Last 30d Activity</Text>
+
+      <View style={styles.statsGrid}>
+        <View style={styles.statBox}>
+          <Text style={[styles.statNumber, {color: '#4CAF50'}]}>40</Text>
+          <Text style={styles.statLabel}>Wins</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={[styles.statNumber, {color: '#FF5252'}]}>10</Text>
+          <Text style={styles.statLabel}>Lose</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={[styles.statNumber, {color: '#FFC107'}]}>02</Text>
+          <Text style={styles.statLabel}>Drawn</Text>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+
 const RecentGameCard = () => {
   const recentGames = [
-    { id: '1', type: 'bullet', opponent: 'Koby', rating: 1304 },
-    { id: '2', type: 'rapid', opponent: 'Alex', rating: 1250 },
-    { id: '3', type: 'bullet', opponent: 'Maria', rating: 1375 },
+    { id: '1', type: 'bullet', opponent: 'Koby', rating: 1304, result: 'loss' },
+    { id: '2', type: 'rapid', opponent: 'Alex', rating: 1250, result: 'win' },
+    { id: '3', type: 'bullet', opponent: 'Maria', rating: 1375, result: 'draw' },
   ];
 
   const getGameTypeImage = (type) => {
@@ -107,36 +239,58 @@ const RecentGameCard = () => {
     }
   };
 
+  const getResultStyle = (result) => {
+    switch(result) {
+      case 'win': return { backgroundColor: '#4CAF50' };
+      case 'loss': return { backgroundColor: '#FF5252' };
+      case 'draw': return { backgroundColor: '#FFC107' };
+      default: return { backgroundColor: '#888888' };
+    }
+  };
+
+  const getResultSymbol = (result) => {
+    switch(result) {
+      case 'win': return '+';
+      case 'loss': return '−';
+      case 'draw': return '=';
+      default: return '−';
+    }
+  };
+
   return (
     <View style={styles.cardContainer}>
-      <View style={{flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16}}>
+      <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
         <Text style={styles.cardTitle}>Recent Games</Text>
-        <TouchableOpacity>
-          <Text style={{color: '#4CAF50', textDecorationLine: 'underline'}}>See All</Text>
+        <TouchableOpacity style={styles.seeAllButton}>
+          <Text style={styles.seeAllText}>See All</Text>
         </TouchableOpacity>
       </View>
 
       {recentGames.map((game) => (
         <View key={game.id} style={styles.recentGameRow}>
           <View style={styles.recentGamePlayer}>
-            <Image source={getGameTypeImage(game.type)} style={{width: 30, height: 30, marginRight: 12}} />
-            <View>
-              <Text style={styles.playerName}>{game.opponent} ({game.rating})</Text>
-            </View>
+            <Image 
+              source={getGameTypeImage(game.type)} 
+              style={styles.gameTypeImage}
+            />
+            <Ionicons 
+              name="person-circle" 
+              size={40} 
+              color="#808080" 
+              style={styles.playerAvatar}
+            />
+            <Text style={styles.playerName}>
+              {game.opponent}
+              <Text style={styles.ratingText}>({game.rating})</Text>
+            </Text>
           </View>
-          <View style={{flexDirection: 'row', alignItems: 'center'}}>
-            <View style={{
-              width: 30, 
-              height: 30, 
-              borderRadius: 15, 
-              backgroundColor: '#FF5252', 
-              justifyContent: 'center', 
-              alignItems: 'center',
-              marginRight: 8
-            }}>
-              <Text style={{color: 'white', fontWeight: 'bold'}}>-</Text>
+          <View style={styles.resultContainer}>
+            <View style={[styles.resultIndicator, getResultStyle(game.result)]}>
+              <Text style={{color: '#FFFFFF', fontWeight: 'bold', fontSize: 16}}>
+                {getResultSymbol(game.result)}
+              </Text>
             </View>
-            <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
+            <Ionicons name="arrow-forward" size={24} color="#888888" />
           </View>
         </View>
       ))}
@@ -155,10 +309,10 @@ const GameModeCard = () => {
 
   return (
     <View style={styles.cardContainer}>
-      <Text style={styles.cardTitle}>Start a Game</Text>
-      <Text style={styles.cardSubtitle}>Please select the game mode you want to play</Text>
+      {/* <Text style={styles.cardTitle}>Start a Game</Text>
+      <Text style={styles.cardSubtitle}>Please select the game mode you want to play</Text> */}
 
-      <View style={{
+      {/* <View style={{
         flexDirection: 'row', 
         backgroundColor: '#2A2A2A', 
         borderRadius: 12, 
@@ -169,17 +323,17 @@ const GameModeCard = () => {
           <Image source={human} style={{width: 50, height: 50, marginRight: 12}} />
           <Text style={{color: '#FFFFFF', fontSize: 16}}>Human</Text>
         </TouchableOpacity>
-      </View>
+      </View> */}
 
       {/* Time Control Picker */}
-      <View style={{
+      {/* <View style={{
         backgroundColor: '#2A2A2A', 
         borderRadius: 12, 
         padding: 12,
         marginBottom: 16
       }}>
         <Text style={{color: '#FFFFFF', marginBottom: 8}}>10 mins (Rapid)</Text>
-      </View>
+      </View> */}
 
       {isSearching ? (
         <View>
@@ -203,74 +357,7 @@ const GameModeCard = () => {
   );
 };
 
-const StatsCard = () => {
-  const [profile, setProfile] = useState(null);
-    const auth = useContext(AuthContext);
 
-    
-  
-
-    useEffect(() => {
-      if (!auth.userId) {
-        console.log("User ID is still null, waiting...");
-        return;
-      }
-  
-      const fetchProfile = async () => {
-        try {
-          console.log("Fetching profile for userId:", auth.userId);
-          const response = await axios.get(
-            `${API_URL}/api/profile/${auth.userId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${auth.token}`,
-              },
-            }
-          );
-          setProfile(response.data.user);
-          console.log("Profile data:", response.data.user);
-        } catch (err) {
-          console.log("Profile fetch error:", err);
-        }
-      };
-  
-      fetchProfile();
-    }, [auth.userId]);
-
-  return (
-    <View style={styles.cardContainer}>
-      <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 16}}>
-        <Ionicons name="person-circle" size={80} color="#808080" />
-        <View style={{marginLeft: 12}}>
-          <Text style={styles.cardTitle}>
-            {profile ? `Hello, ${profile.name}` : 'Hello, There'}
-          </Text>
-          <Text style={styles.cardSubtitle}>
-            {profile ? `Rating: ${profile.rating}` : 'Rating: Loading...'}
-          </Text>
-          <Text style={styles.cardSubtitle}>Super Challenger</Text>
-        </View>
-      </View>
-
-      <Text style={{color: '#888888', marginBottom: 12}}>Last 30d Activity</Text>
-
-      <View style={styles.statsGrid}>
-        <View style={styles.statBox}>
-          <Text style={[styles.statNumber, {color: '#4CAF50'}]}>40</Text>
-          <Text style={styles.statLabel}>Wins</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={[styles.statNumber, {color: '#FF5252'}]}>10</Text>
-          <Text style={styles.statLabel}>Lose</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={[styles.statNumber, {color: '#FFC107'}]}>02</Text>
-          <Text style={styles.statLabel}>Drawn</Text>
-        </View>
-      </View>
-    </View>
-  );
-};
 
 
 

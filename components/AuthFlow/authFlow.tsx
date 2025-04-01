@@ -8,7 +8,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import CountryPicker from 'react-native-country-picker-modal'; // Import the library
 
-const API_URL = "http://172.16.0.132:8080";
+const API_URL = "http://172.16.0.102:8080";
 LogBox.ignoreAllLogs();
 
 export default function AuthFlow() {
