@@ -8,7 +8,8 @@ import rapid from '@/assets/images/rapid.png';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '@/components/context/authContext';
 import { EXPO_PUBLIC_API_URL } from '@env';
-import { Redirect } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
+import GameScreen from './gameScreen';
 
 const API_URL = EXPO_PUBLIC_API_URL
 
@@ -97,10 +98,14 @@ const styles = StyleSheet.create({
 const GameModeCard = () => {
   const [selectedTime, setSelectedTime] = useState(10 * 60);
   const [isSearching, setIsSearching] = useState(false);
+  const router = useRouter();
 
   const handlePlay = () => {
-    // Placeholder for game search logic
     setIsSearching(true);
+    setTimeout(() => {
+      router.push('/(tabs)/gameScreen');
+      setIsSearching(false);
+    }, 500); // Small delay for better UX
   };
 
   return (
