@@ -13,6 +13,7 @@ export interface GameStats {
   
   export interface UserProfile {
     username: string;
+    name: string;
     title?: string;
     ratings: {
       rapid: number;

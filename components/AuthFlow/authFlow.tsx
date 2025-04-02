@@ -9,7 +9,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 
-const API_URL = "http://192.168.0.11:8080"
+const API_URL = "http://172.16.0.109:8080"
 
 export default function AuthFlow() {
     const auth = useContext(AuthContext);
@@ -281,7 +281,7 @@ export default function AuthFlow() {
                                 style={styles.dropdownIcon} 
                             />
                         </TouchableOpacity>
-                        <CountryPicker
+                        {/* <CountryPicker
                             visible={showCountryPicker}
                             withFlag
                             withFilter
@@ -295,7 +295,7 @@ export default function AuthFlow() {
                                 primaryColor: '#3D4CED',
                                 filterPlaceholderTextColor: '#999',
                             }}
-                        />
+                        /> */}
                     </View>
                 )}
 

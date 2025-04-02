@@ -8,11 +8,11 @@ import rapid from '@/assets/images/rapid.png';
 import logo from "@/assets/images/logo-icon.png";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '@/components/context/authContext';
-import { EXPO_PUBLIC_API_URL } from '@env';
+// import { EXPO_PUBLIC_API_URL } from '@env';
 import { Redirect, useRouter } from 'expo-router';
-import GameScreen from './gameScreen';
+// import GameScreen from './gameScreen';
 
-const API_URL = EXPO_PUBLIC_API_URL
+const API_URL = process.env.EXPO_PUBLIC_API_URL
 
 
 const styles = StyleSheet.create({
@@ -368,64 +368,64 @@ const RecentGameCard = () => {
   );
 };
 
-const GameModeCard = () => {
-  const [selectedTime, setSelectedTime] = useState(10 * 60);
-  const [isSearching, setIsSearching] = useState(false);
+// const GameModeCard = () => {
+//   const [selectedTime, setSelectedTime] = useState(10 * 60);
+//   const [isSearching, setIsSearching] = useState(false);
 
-  const handlePlay = () => {
-    // Placeholder for game search logic
-    setIsSearching(true);
-  };
+//   const handlePlay = () => {
+//     // Placeholder for game search logic
+//     setIsSearching(true);
+//   };
 
-  return (
-    <View style={styles.cardContainer}>
-      {/* <Text style={styles.cardTitle}>Start a Game</Text>
-      <Text style={styles.cardSubtitle}>Please select the game mode you want to play</Text> */}
+//   return (
+//     <View style={styles.cardContainer}>
+//       {/* <Text style={styles.cardTitle}>Start a Game</Text>
+//       <Text style={styles.cardSubtitle}>Please select the game mode you want to play</Text> */}
 
-      {/* <View style={{
-        flexDirection: 'row', 
-        backgroundColor: '#2A2A2A', 
-        borderRadius: 12, 
-        padding: 12,
-        marginBottom: 16
-      }}>
-        <TouchableOpacity style={{flex: 1, flexDirection: 'row', alignItems: 'center'}}>
-          <Image source={human} style={{width: 50, height: 50, marginRight: 12}} />
-          <Text style={{color: '#FFFFFF', fontSize: 16}}>Human</Text>
-        </TouchableOpacity>
-      </View> */}
+//       {/* <View style={{
+//         flexDirection: 'row', 
+//         backgroundColor: '#2A2A2A', 
+//         borderRadius: 12, 
+//         padding: 12,
+//         marginBottom: 16
+//       }}>
+//         <TouchableOpacity style={{flex: 1, flexDirection: 'row', alignItems: 'center'}}>
+//           <Image source={human} style={{width: 50, height: 50, marginRight: 12}} />
+//           <Text style={{color: '#FFFFFF', fontSize: 16}}>Human</Text>
+//         </TouchableOpacity>
+//       </View> */}
 
-      {/* Time Control Picker */}
-      {/* <View style={{
-        backgroundColor: '#2A2A2A', 
-        borderRadius: 12, 
-        padding: 12,
-        marginBottom: 16
-      }}>
-        <Text style={{color: '#FFFFFF', marginBottom: 8}}>10 mins (Rapid)</Text>
-      </View> */}
+//       {/* Time Control Picker */}
+//       {/* <View style={{
+//         backgroundColor: '#2A2A2A', 
+//         borderRadius: 12, 
+//         padding: 12,
+//         marginBottom: 16
+//       }}>
+//         <Text style={{color: '#FFFFFF', marginBottom: 8}}>10 mins (Rapid)</Text>
+//       </View> */}
 
-      {isSearching ? (
-        <View>
-          <Text style={{color: '#FFFFFF', textAlign: 'center'}}>Searching for opponent...</Text>
-          <TouchableOpacity 
-            onPress={() => setIsSearching(false)}
-            style={[styles.playButton, {backgroundColor: '#FF5252'}]}
-          >
-            <Text style={styles.playButtonText}>Cancel Search</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <TouchableOpacity 
-          style={styles.playButton}
-          onPress={handlePlay}
-        >
-          <Text style={styles.playButtonText}>Start a New Game</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-};
+//       {isSearching ? (
+//         <View>
+//           <Text style={{color: '#FFFFFF', textAlign: 'center'}}>Searching for opponent...</Text>
+//           <TouchableOpacity 
+//             onPress={() => setIsSearching(false)}
+//             style={[styles.playButton, {backgroundColor: '#FF5252'}]}
+//           >
+//             <Text style={styles.playButtonText}>Cancel Search</Text>
+//           </TouchableOpacity>
+//         </View>
+//       ) : (
+//         <TouchableOpacity 
+//           style={styles.playButton}
+//           onPress={handlePlay}
+//         >
+//           <Text style={styles.playButtonText}>Start a New Game</Text>
+//         </TouchableOpacity>
+//       )}
+//     </View>
+//   );
+// };
 
 
 
