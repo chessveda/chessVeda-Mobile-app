@@ -3,13 +3,13 @@ import { View, Text, TextInput, TouchableOpacity, Image, Alert, ScrollView, Acti
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { AuthContext } from "@/components/context/authContext";
 import axios from "axios";
-// import authpic from "@/assets/images/auth-picture.png";
 import logo from "@/assets/images/logo-icon.png";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 
-const API_URL = "http://172.16.0.109:8080"
+const API_URL = "http://172.16.0.109:8080";
+LogBox.ignoreAllLogs();
 
 export default function AuthFlow() {
     const auth = useContext(AuthContext);
@@ -30,14 +30,14 @@ export default function AuthFlow() {
         countryCode: "IN", // Default country code
     });
 
-    const handleDateChange = (event, selectedDate) => {
+    const handleDateChange = (event : any, selectedDate : any) => {
         setShowDatePicker(Platform.OS === 'ios');
         if (selectedDate) {
             setFormData({ ...formData, dob: selectedDate });
         }
     };
 
-    const handleCountrySelect = (country) => {
+    const handleCountrySelect = (country : any) => {
         setFormData({ 
             ...formData, 
             country: country.name, 
@@ -58,7 +58,7 @@ export default function AuthFlow() {
                     auth.login(res.data.userId, res.data.token);
                     router.push("/(tabs)/home");
                 }
-            } catch (error) {
+            } catch (error : any) {
                 Alert.alert("Error", error.response?.data?.message || "Login failed");
             }
         } else {
@@ -74,7 +74,7 @@ export default function AuthFlow() {
                         auth.login(res.data.userId, res.data.token);
                         router.push('/');
                     }
-                } catch (error) {
+                } catch (error : any) {
                     Alert.alert("Error", error.response?.data?.message || "Registration failed");
                 }
             }
@@ -264,7 +264,7 @@ export default function AuthFlow() {
                     </>
                 ) : (
                     <View style={styles.countryContainer}>
-                        <TouchableOpacity 
+                        {/* <TouchableOpacity 
                             style={[styles.inputContainer, styles.countryPickerButton]}
                             onPress={() => setShowCountryPicker(true)}
                         >
@@ -281,7 +281,7 @@ export default function AuthFlow() {
                                 style={styles.dropdownIcon} 
                             />
                         </TouchableOpacity>
-                        {/* <CountryPicker
+                        <CountryPicker
                             visible={showCountryPicker}
                             withFlag
                             withFilter

@@ -8,11 +8,13 @@ import rapid from '@/assets/images/rapid.png';
 import logo from "@/assets/images/logo-icon.png";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '@/components/context/authContext';
+import { UserProfile, TimeControlType } from "@/types/types";
 // import { EXPO_PUBLIC_API_URL } from '@env';
 import { Redirect, useRouter } from 'expo-router';
-// import GameScreen from './gameScreen';
+import GameScreen from '../newGame';
+import { useAuth } from '@/hooks/authHook';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL
+const API_URL = "http://172.16.0.109:8080"
 
 
 const styles = StyleSheet.create({
@@ -160,10 +162,30 @@ const styles = StyleSheet.create({
 const GameModeCard = () => {
   const [selectedTime, setSelectedTime] = useState(10 * 60);
   const [isSearching, setIsSearching] = useState(false);
+  const router = useRouter();
+  const {socket, isSocketConnected} = useContext(AuthContext)
 
-  const handlePlay = () => {
-    // Placeholder for game search logic
+  useEffect(() => {
+    if (!isSocketConnected) {
+      console.log('Attempting to reconnect socket...');
+      // connectSocket();
+    }
+  }, [isSocketConnected]);
+
+  const handlePlay = async () => {
+
+    if (!socket || !socket.connected) {
+      console.error("Socket not connected!");
+      return;
+    }
+
     setIsSearching(true);
+
+    // Navigate to newGame with the time control parameter
+    router.push({
+      pathname: "/newGame",
+      params: { timeControl: selectedTime.toString() }
+    });
   };
 
   return (
@@ -217,18 +239,11 @@ const GameModeCard = () => {
 };
 
 const StatsCard = () => {
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
     const auth = useContext(AuthContext);
     const userId = useContext(AuthContext);
-
-    if (!userId) {
-      return <Redirect href="/auth" />;
-    }
-  
-
     
   
-
   useEffect(() => {
     if (!auth.userId) {
       console.log("User ID is still null, waiting...");
@@ -247,7 +262,7 @@ const StatsCard = () => {
           }
         );
         setProfile(response.data.user);
-        console.log("Profile data:", response.data.user);
+        console.log("Profile data:", response.data);
       } catch (err) {
         console.log("Profile fetch error:", err);
       }
@@ -301,7 +316,7 @@ const RecentGameCard = () => {
     { id: '3', type: 'bullet', opponent: 'Maria', rating: 1375, result: 'draw' },
   ];
 
-  const getGameTypeImage = (type) => {
+  const getGameTypeImage = (type : any) => {
     switch(type) {
       case 'bullet': return bullet;
       case 'rapid': return rapid;
@@ -309,7 +324,7 @@ const RecentGameCard = () => {
     }
   };
 
-  const getResultStyle = (result) => {
+  const getResultStyle = (result : any) => {
     switch(result) {
       case 'win': return { backgroundColor: '#4CAF50' };
       case 'loss': return { backgroundColor: '#FF5252' };
@@ -318,7 +333,7 @@ const RecentGameCard = () => {
     }
   };
 
-  const getResultSymbol = (result) => {
+  const getResultSymbol = (result : any) => {
     switch(result) {
       case 'win': return '+';
       case 'loss': return '−';
@@ -367,67 +382,6 @@ const RecentGameCard = () => {
     </View>
   );
 };
-
-// const GameModeCard = () => {
-//   const [selectedTime, setSelectedTime] = useState(10 * 60);
-//   const [isSearching, setIsSearching] = useState(false);
-
-//   const handlePlay = () => {
-//     // Placeholder for game search logic
-//     setIsSearching(true);
-//   };
-
-//   return (
-//     <View style={styles.cardContainer}>
-//       {/* <Text style={styles.cardTitle}>Start a Game</Text>
-//       <Text style={styles.cardSubtitle}>Please select the game mode you want to play</Text> */}
-
-//       {/* <View style={{
-//         flexDirection: 'row', 
-//         backgroundColor: '#2A2A2A', 
-//         borderRadius: 12, 
-//         padding: 12,
-//         marginBottom: 16
-//       }}>
-//         <TouchableOpacity style={{flex: 1, flexDirection: 'row', alignItems: 'center'}}>
-//           <Image source={human} style={{width: 50, height: 50, marginRight: 12}} />
-//           <Text style={{color: '#FFFFFF', fontSize: 16}}>Human</Text>
-//         </TouchableOpacity>
-//       </View> */}
-
-//       {/* Time Control Picker */}
-//       {/* <View style={{
-//         backgroundColor: '#2A2A2A', 
-//         borderRadius: 12, 
-//         padding: 12,
-//         marginBottom: 16
-//       }}>
-//         <Text style={{color: '#FFFFFF', marginBottom: 8}}>10 mins (Rapid)</Text>
-//       </View> */}
-
-//       {isSearching ? (
-//         <View>
-//           <Text style={{color: '#FFFFFF', textAlign: 'center'}}>Searching for opponent...</Text>
-//           <TouchableOpacity 
-//             onPress={() => setIsSearching(false)}
-//             style={[styles.playButton, {backgroundColor: '#FF5252'}]}
-//           >
-//             <Text style={styles.playButtonText}>Cancel Search</Text>
-//           </TouchableOpacity>
-//         </View>
-//       ) : (
-//         <TouchableOpacity 
-//           style={styles.playButton}
-//           onPress={handlePlay}
-//         >
-//           <Text style={styles.playButtonText}>Start a New Game</Text>
-//         </TouchableOpacity>
-//       )}
-//     </View>
-//   );
-// };
-
-
 
 
 

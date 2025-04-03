@@ -20,7 +20,9 @@ import {
   VictoryTheme,
   VictoryAxis,
 } from "victory-native";
-// import { EXPO_PUBLIC_API_URL } from "@env";
+import { UserProfile } from "@/types/types";
+import { useRouter } from "expo-router";
+
 
 const { width } = Dimensions.get("window");
 
@@ -29,8 +31,18 @@ const API_URL = "http://172.16.0.109:8080"
 
 const Profile = () => {
   const auth = useContext(AuthContext);
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [selectedMode, setSelectedMode] = useState("Rapid");
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      await auth.logout();
+    
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
 
   const data = [
     { x: "Jul", y: 1050 },
@@ -112,7 +124,7 @@ const Profile = () => {
     fetchProfile();
   }, []);
 
-  const renderGameItem = ({ item }) => (
+  const renderGameItem = ({ item }: any) => (
     <View>
       <View style={styles.gameItem}>
         <View style={styles.gameInfo}>
@@ -153,6 +165,8 @@ const Profile = () => {
             <Text style={styles.profileTitle}>Super Challenger</Text>
           </View>
         </View>
+
+      
         <View style={styles.profileMeta}>
           <View style={styles.metaItem}>
             <Icon name="calendar-outline" size={24} color="#808080" />
@@ -245,6 +259,9 @@ const Profile = () => {
           </VictoryChart>
           </View>
         </View>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+    <Text style={styles.logoutButtonText}>Logout</Text>
+  </TouchableOpacity>
       </View>
       </View>
     </ScrollView>
@@ -412,6 +429,19 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
     marginRight: 4,
+  },
+  logoutButton: {
+    backgroundColor: "#FF6347",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  logoutButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });
 
