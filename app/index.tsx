@@ -3,11 +3,13 @@ import React, { useState, useEffect, useContext } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '@/components/context/authContext';
+import SplashScreen from '@/components/splash/SplashScreen';
 
 export default function Index() {
   const { userId, token } = useContext(AuthContext);
   const [isChecking, setIsChecking] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -35,18 +37,9 @@ export default function Index() {
     checkAuth();
   }, []);
 
-  if (isChecking) {
+  if (isChecking || showSplash) {
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#121212",
-        }}
-      >
-        <ActivityIndicator size="large" color="#4CAF50" />
-      </View>
+     <SplashScreen />
     );
   }
 

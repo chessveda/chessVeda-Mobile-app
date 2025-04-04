@@ -11,9 +11,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '@/components/context/authContext';
 import { UserProfile, TimeControlType } from "@/types/types";
 // import { EXPO_PUBLIC_API_URL } from '@env';
-import { Redirect, useRouter } from 'expo-router';
 import GameScreen from '../newGame';
 import { useAuth } from '@/hooks/authHook';
+import { useRouter } from 'expo-router';
 
 const API_URL = "http://172.16.0.109:8080"
 
@@ -435,6 +435,7 @@ const StatsCard = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
     const auth = useContext(AuthContext);
     const userId = useContext(AuthContext);
+    const router = useRouter();
     
   
   useEffect(() => {
@@ -466,7 +467,7 @@ const StatsCard = () => {
 
   // Handle redirection if no userId
   if (!auth?.userId) {
-    return <Redirect href="/auth" />;
+    router.replace("/auth");    
   }
 
   return (
@@ -600,14 +601,23 @@ const RecentGameCard = () => {
 
 export default function Home() {
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedTime, setSelectedTime] = useState(10 * 60);
   const [isSearching, setIsSearching] = useState(false);
   const auth = useContext(AuthContext);
+  const {socket, isSocketConnected} = useContext(AuthContext)
+  const router = useRouter()
 
-  const handlePlay = () => {
-    // Placeholder for game search logic
-    setIsSearching(true);
-    // Here you would implement the actual game search/matchmaking logic
-  };
+  const handlePlay = async () => {
+    if (!socket || !socket.connected) {
+      console.error("Socket not connected!");
+      return;
+    }
+
+  router.push({
+    pathname: "/newGame",
+    params: { timeControl: selectedTime.toString() }
+  });
+  }
 
   return (
     <SafeAreaView style={styles.container}>

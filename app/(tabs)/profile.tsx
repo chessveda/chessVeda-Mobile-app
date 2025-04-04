@@ -1,3 +1,5 @@
+//@ts-nocheck
+
 import React, { useState, useEffect, useContext } from "react";
 import {
   View,
@@ -273,6 +275,10 @@ const Profile = () => {
         <View style={styles.contentContainer}>
         <RatingActivity selectedMode={selectedMode} setSelectedMode={setSelectedMode} />
         <RecentGames />
+
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+     <Text style={styles.logoutButtonText}>Logout</Text>
+   </TouchableOpacity>
           
         </View>
       </ScrollView>
