@@ -6,6 +6,8 @@ export default function RootLayout() {
     <AuthProvider>
       <Stack
         screenOptions={{
+          animation: 'fade',
+          contentStyle: { backgroundColor: '#000' },
           headerShown: false,
         }}
       />
