@@ -61,9 +61,9 @@ const gameTypes = [
   { name: "Rapid", icon: require("../../assets/images/rapid.png"), rating: "1430" },
   { name: "bullet", icon: require("../../assets/images/bullet.png"), rating: "1254" },
   { name: "Daily", icon: require("../../assets/images/daily.png"), rating: "1200" },
-  { name: "Classical", icon: require("../../assets/images/classical.png"), rating: "1430" },
+  { name: "Daily04", icon: require("../../assets/images/classical.png"), rating: "1430" },
   { name: "Blitz", icon: require("../../assets/images/blitz.png"), rating: "892" },
-  { name: "Freestyle", icon: require("../../assets/images/freestyle.png"), rating: "400" },
+  { name: "Puzzles", icon: require("../../assets/images/freestyle.png"), rating: "400" },
 ];
 
 // Component for the profile header section
