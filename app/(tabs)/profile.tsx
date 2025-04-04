@@ -7,28 +7,230 @@ import {
   ScrollView,
   TouchableOpacity,
   FlatList,
-  Dimensions,
   SafeAreaView,
+  Dimensions,
 } from "react-native";
 import { AuthContext } from "@/components/context/authContext";
 import axios from "axios";
-import moment from "moment";
-import Icon from "react-native-vector-icons/Ionicons";
-import {
-  VictoryArea,
-  VictoryChart,
-  VictoryTheme,
-  VictoryAxis,
-} from "victory-native";
+
+import { LineChart } from 'react-native-chart-kit';
+import Icon from 'react-native-vector-icons/Ionicons';
 import { UserProfile } from "@/types/types";
-import { useRouter } from "expo-router";
+import { useRouter } from "@/.expo/types/router";
+const API_URL = "http://172.16.0.102:8080";
 
 
-const { width } = Dimensions.get("window");
 
-const API_URL = "http://172.16.0.109:8080"
+const recentGames = [
+  {
+    id: "1",
+    type: "bullet",
+    opponent: "Koby (1304)",
+    result: "-",
+    avatar: "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
+  },
+  {
+    id: "2",
+    type: "rapid",
+    opponent: "Koby (1304)",
+    result: "-",
+    avatar: "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
+  },
+  {
+    id: "3",
+    type: "bullet",
+    opponent: "Koby (1304)",
+    result: "-",
+    avatar: "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
+  },
+  {
+    id: "4",
+    type: "bullet",
+    opponent: "Koby (1304)",
+    result: "-",
+    avatar: "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
+  },
+  {
+    id: "5",
+    type: "bullet",
+    opponent: "Koby (1304)",
+    result: "-",
+    avatar: "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
+  },
+];
+
+const gameTypes = [
+  { name: "Rapid", icon: require("../../assets/images/rapid.png"), rating: "1430" },
+  { name: "bullet", icon: require("../../assets/images/bullet.png"), rating: "1254" },
+  { name: "Daily", icon: require("../../assets/images/daily.png"), rating: "1200" },
+  { name: "Daily04", icon: require("../../assets/images/classical.png"), rating: "1430" },
+  { name: "Blitz", icon: require("../../assets/images/blitz.png"), rating: "892" },
+  { name: "Puzzles", icon: require("../../assets/images/freestyle.png"), rating: "400" },
+];
+
+// Component for the profile header section
+const ProfileHeader = ({ profile } : any) => (
+  <View style={styles.profileHeader}>
+    <View style={styles.profileInfo}>
+      {/* Replace icon with image from placeholder service */}
+      <Image 
+  source={{ uri: "https://randomuser.me/api/portraits/men/75.jpg" }} 
+  style={styles.profileImage} 
+/>
+
+      <View style={styles.profileText}>
+        <Text style={styles.profileName}>
+          {profile ? `${profile?.name}` : "Hello, There"}
+        </Text>
+        <Text style={styles.profileTitle}>Super Challenger</Text>
+      </View>
+    </View>
+  </View>
+);
+
+// Component for game type cards
+const GameTypeCards = () => (
+  <View style={styles.gridContainer}>
+    {gameTypes.map((game, index) => (
+      <View key={index} style={styles.gameTypeCard}>
+        <View style={styles.gameTypeInfo}>
+        <Image 
+      source={game.icon} 
+      style={styles.gameTypeIcon} 
+    />
+          <Text style={styles.gameTypeName}>{game.name}</Text>
+        </View>
+        <Text style={styles.gameTypeRating}>{game.rating}</Text>
+      </View>
+    ))}
+  </View>
+);
 
 
+// Component for a single game item
+const GameItem = ({ item } : any) => (
+  <View>
+    <View style={styles.gameItem}>
+      <View style={styles.gameInfo}>
+        <Image
+          source={
+            item.type === "bullet"
+              ? require("../../assets/images/bullet.png")
+              : require("../../assets/images/rapid.png")
+          }
+          style={styles.gameIcon}
+        />
+        <View style={styles.opponentInfo}>
+          <Image source={{ uri: item.avatar }} style={styles.avatar} />
+          <Text style={styles.opponentName}>{item.opponent}</Text>
+        </View>
+      </View>
+      <View style={styles.gameResult}>
+        <View style={styles.resultBadge}>
+          <Text style={styles.resultText}>{item.result}</Text>
+        </View>
+        <Icon name="arrow-forward" size={24} color="#fff" />
+      </View>
+    </View>
+    <View style={styles.divider} />
+  </View>
+);
+
+// Component for the recent games section
+const RecentGames = () => (
+  <View style={styles.recentGames}>
+    <SectionHeader title="Recent Games" children={undefined} />
+    <FlatList
+      data={recentGames}
+      renderItem={({ item }) => <GameItem item={item} />}
+      keyExtractor={(item) => item.id}
+      scrollEnabled={false}
+    />
+  </View>
+);
+
+// Component for section headers
+const SectionHeader = ({ title, children } : any) => (
+  <View style={styles.sectionHeader}>
+    <Text style={styles.sectionTitle}>{title}</Text>
+    {children || (
+      <TouchableOpacity>
+        <Text style={styles.seeAll}>See All</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+);
+
+// Component for the rating activity chart
+const RatingActivity = () => {
+  const [selectedDot, setSelectedDot] = useState(null);
+
+  const handleDataPointClick = (data : any) => {
+    // data.index is the index of the data point pressed
+    setSelectedDot(data.index);
+  };
+
+  return (
+    <View style={{ backgroundColor: '#111', padding: 16 }}>
+      <Text style={{ color: '#fff', fontSize: 14, fontWeight: '400', marginBottom: 8 }}>
+        Rating Activity
+      </Text>
+
+      <LineChart
+        data={{
+          labels: ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+          datasets: [{ data: [1150, 1100, 1180, 1290, 1250, 1320] }],
+        }}
+        width={475}
+        height={167}
+        chartConfig={{
+          backgroundColor: '#11111',
+          backgroundGradientFrom: '#121212',
+          backgroundGradientTo: '#111111',
+          color: (opacity = 1) => `rgba(61, 76, 237, ${opacity})`, // #3D4CED
+          labelColor: () => '#ffffff',
+          style: {
+            borderRadius: 16,
+          },
+          propsForDots: {
+            r: '4',
+            strokeWidth: '2',
+            stroke: '#3D4CED',
+          },
+        }}
+        bezier
+        withShadow
+        withHorizontalLabels={false} 
+        style={{ marginLeft:-50}}
+        onDataPointClick={handleDataPointClick}
+        renderDotContent={({ x, y, index, indexData } : any) => {
+          // Only render text if this dot is selected
+          if (index === selectedDot) {
+            return (
+              <Text
+                key={index}
+                style={{
+                  position: 'absolute',
+                  left: x - 10,
+                  top: y - 25,
+                  color: '#fff',
+                  fontWeight: '400',
+                  backgroundColor:'#3D4CED'
+                }}
+              >
+                {indexData}
+              </Text>
+            );
+          }
+          return null;
+        }}
+      />
+    </View>
+  );
+};
+
+
+// Main Profile component
 const Profile = () => {
   const auth = useContext(AuthContext);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -43,67 +245,6 @@ const Profile = () => {
       console.error("Logout failed:", error);
     }
   };
-
-  const data = [
-    { x: "Jul", y: 1050 },
-    { x: "Aug", y: 1100 },
-    { x: "Sep", y: 1300 },
-    { x: "Oct", y: 1200 },
-    { x: "Nov", y: 1150 },
-    { x: "Dec", y: 1400 },
-  ];
-
-  const recentGames = [
-    {
-      id: "1",
-      type: "bullet",
-      opponent: "Koby (1304)",
-      result: "-",
-      avatar:
-        "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
-    },
-    {
-      id: "2",
-      type: "rapid",
-      opponent: "Koby (1304)",
-      result: "-",
-      avatar:
-        "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
-    },
-    {
-      id: "3",
-      type: "bullet",
-      opponent: "Koby (1304)",
-      result: "-",
-      avatar:
-        "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
-    },
-    {
-      id: "4",
-      type: "bullet",
-      opponent: "Koby (1304)",
-      result: "-",
-      avatar:
-        "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
-    },
-    {
-      id: "5",
-      type: "bullet",
-      opponent: "Koby (1304)",
-      result: "-",
-      avatar:
-        "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
-    },
-  ];
-
-  const gameTypes = [
-    { name: "Rapid", icon: require("../../assets/images/rapid.svg"), rating: "1430" },
-    { name: "Bullet", icon: require("../../assets/images/bulletSvg.svg"), rating: "1254" },
-    { name: "Daily", icon: require("../../assets/images/daily.svg"), rating: "1200" },
-    { name: "Classical", icon: require("../../assets/images/classical.svg"), rating: "1430" },
-    { name: "Blitz", icon: require("../../assets/images/blitz.svg"), rating: "892" },
-    { name: "Freestyle", icon: require("../../assets/images/freestyle.svg"), rating: "400" },
-];
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -124,228 +265,105 @@ const Profile = () => {
     fetchProfile();
   }, []);
 
-  const renderGameItem = ({ item }: any) => (
-    <View>
-      <View style={styles.gameItem}>
-        <View style={styles.gameInfo}>
-          <Image
-            source={
-              item.type === "bullet"
-                ? require("../../assets/images/bullet.png")
-                : require("../../assets/images/rapid.png")
-            }
-            style={styles.gameIcon}
-          />
-          <View style={styles.opponentInfo}>
-            <Image source={{ uri: item.avatar }} style={styles.avatar} />
-            <Text style={styles.opponentName}>{item.opponent}</Text>
-          </View>
-        </View>
-        <View style={styles.gameResult}>
-          <View style={styles.resultBadge}>
-            <Text style={styles.resultText}>{item.result}</Text>
-          </View>
-          <Icon name="arrow-forward" size={24} color="#fff" />
-        </View>
-      </View>
-      <View style={styles.divider} />
-    </View>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
-    <ScrollView>
-      <View style={styles.profileHeader}>
-        <View style={styles.profileInfo}>
-          <Icon name="person-circle-outline" size={80} color="#808080" />
-          <View style={styles.profileText}>
-            <Text style={styles.profileName}>
-              {profile ? `Hello, ${profile?.name}` : "Hello, There"}
-            </Text>
-            <Text style={styles.profileTitle}>Super Challenger</Text>
-          </View>
+      <ScrollView>
+        <ProfileHeader profile={profile} />
+        <GameTypeCards />
+        <View style={styles.contentContainer}>
+        <RatingActivity selectedMode={selectedMode} setSelectedMode={setSelectedMode} />
+        <RecentGames />
+          
         </View>
-
-      
-        <View style={styles.profileMeta}>
-          <View style={styles.metaItem}>
-            <Icon name="calendar-outline" size={24} color="#808080" />
-            <Text style={styles.metaText}>
-              {profile ? moment(profile?.dob).format("MMM Do YY") : ""}
-            </Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Icon name="location-outline" size={24} color="#808080" />
-            <Text style={styles.metaText}>{profile?.country}</Text>
-          </View>
-        </View>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.gameTypesContainer}
-        >
-        {gameTypes.map((game, index) => (
-          <View key={index} style={styles.gameTypeCard}>
-            <View style={styles.gameTypeInfo}>
-              <Image source={game.icon} style={styles.gameTypeIcon} />
-              <Text style={styles.gameTypeName}>{game.name}</Text>
-            </View>
-            <Text style={styles.gameTypeRating}>{game.rating}</Text>
-          </View>
-        ))}
       </ScrollView>
-
-      <View style={styles.contentContainer}>
-        <View style={styles.recentGames}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Games</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAll}>See All</Text>
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            data={recentGames}
-            renderItem={renderGameItem}
-            keyExtractor={(item) => item.id}
-            scrollEnabled={false}
-            />
-        </View>
-
-        <View style={styles.ratingActivity}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Rating Activity</Text>
-            <TouchableOpacity
-              style={styles.modeSelector}
-              onPress={() =>
-                setSelectedMode((prev) => (prev === "Rapid" ? "Bullet" : "Rapid"))
-              }
-              >
-              <Text style={styles.modeText}>{selectedMode}</Text>
-              <Icon name="chevron-down-outline" size={20} color="#000" />
-            </TouchableOpacity>
-          </View>
-          <View style={{ height: 300 }}>
-          <View style={{ height: 300 }}>
-          <VictoryChart
-            theme={VictoryTheme.material}
-            >
-            <VictoryAxis
-              style={{
-                axis: { stroke: "#666" },
-                tickLabels: { fill: "#666", fontSize: 12 },
-              }}
-              />
-            <VictoryArea
-              data={data}
-              style={{
-                data: {
-                  fill: "#4169E1",
-                  stroke: "#4169E1",
-                  strokeWidth: 2,
-                  fillOpacity: 0.2,
-                },
-              }}
-              interpolation="natural"
-              />
-            <VictoryAxis
-              dependentAxis
-              style={{
-                axis: { stroke: "none" },
-                tickLabels: { fill: "none" },
-              }}
-              />
-          </VictoryChart>
-          </View>
-        </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-    <Text style={styles.logoutButtonText}>Logout</Text>
-  </TouchableOpacity>
-      </View>
-      </View>
-    </ScrollView>
-              </SafeAreaView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#121212",
-    padding: 16,
+    backgroundColor: "#000",
+    padding: 10,
   },
   profileHeader: {
-    backgroundColor: "#1E1E1E",
+    backgroundColor: "#000",
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
+    padding: 16,
   },
   profileInfo: {
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 24,
+  },
+  profileImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    marginBottom: 10,
   },
   profileText: {
-    marginLeft: 16,
+    alignItems: "center",
   },
   profileName: {
     color: "#fff",
     fontSize: 24,
-    fontWeight: "600",
+    fontWeight: "500",
+    paddingVertical: 5,
+    textAlign: "center",
   },
   profileTitle: {
-    color: "#808080",
+    color: "#ffffff",
     fontSize: 16,
+    textAlign: "center",
+    fontWeight: "400",
   },
-  profileMeta: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  metaItem: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  metaText: {
-    color: "#fff",
-    marginLeft: 8,
-  },
+ 
   gameTypesContainer: {
-    marginBottom: 16,
+    marginBottom: 6,
   },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+  },
+  
   gameTypeCard: {
-    backgroundColor: "#121212",
-    borderRadius: 12,
-    padding: 16,
-    marginRight: 12,
-    width: 150,
-    height: 100,
-    justifyContent: "space-between",
+    width: 112,
+    height:85,
+    backgroundColor: '#3D3D3D',
+    borderRadius: 6,
+    marginBottom: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
+  
   gameTypeInfo: {
     flexDirection: "row",
     alignItems: "center",
   },
   gameTypeIcon: {
-    width: 24,
-    height: 24,
+    width: 34,
+    height: 34,
     marginRight: 8,
   },
   gameTypeName: {
-    color: "#808080",
+    color: "#828282",
+    fontWeight: "400",
     fontSize: 14,
   },
   gameTypeRating: {
     color: "#fff",
     fontSize: 20,
-    fontWeight: "600",
-    alignSelf: "flex-end",
+    fontWeight: "500",
+    alignSelf: "center",
   },
   contentContainer: {
     flexDirection: "column",
   },
   recentGames: {
-    backgroundColor: "#1E1E1E",
+    backgroundColor: "#000",
     borderRadius: 12,
     padding: 20,
     marginBottom: 16,
@@ -358,12 +376,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: "#fff",
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 14,
+    fontWeight: 400,
   },
   seeAll: {
     color: "#fff",
     textDecorationLine: "underline",
+    fontSize:14,
+    fontWeight: 400,
   },
   gameItem: {
     flexDirection: "row",
@@ -417,18 +437,39 @@ const styles = StyleSheet.create({
     backgroundColor: "#3D3D3D",
   },
   ratingActivity: {
-    backgroundColor: "#1E1E1E",
-    borderRadius: 12,
-    padding: 16,
+    marginVertical: 16,
+    paddingHorizontal: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  title: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   modeSelector: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   modeText: {
-    color: "#fff",
-    fontWeight: "600",
-    marginRight: 4,
+    color: '#fff',
+    marginRight: 5,
+    fontWeight: '500',
+    fontSize: 14,
+  },
+  chartContainer: {
+    backgroundColor: '#121212',
+    borderRadius: 12,
+    overflow: 'hidden',
+    paddingVertical: 10,
+    height: 240,
   },
   logoutButton: {
     backgroundColor: "#FF6347",
