@@ -16,7 +16,7 @@ import axios from "axios";
 import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { UserProfile } from "@/types/types";
-import { useRouter } from "@/.expo/types/router";
+import { useRouter } from 'expo-router';
 const API_URL = "http://172.16.0.102:8080";
 
 
