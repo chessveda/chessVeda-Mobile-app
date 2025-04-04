@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Chess } from 'chess.js';
 import Chessboard from 'react-native-chessboard';
+// import { ChessMove } from 'react-native-chessboard/lib/typescript/types';
 import { io } from 'socket.io-client';
 import { AuthContext } from '@/components/context/authContext';
 import { useLocalSearchParams } from 'expo-router';
@@ -19,38 +20,37 @@ import { useRouter } from 'expo-router';
 import { Square } from 'chess.js';
 
 type PlayerColor = 'white' | 'black';
-type MoveData = {
-  from: string;
-  to: string;
-};
+type GamePhase = 'matchmaking' | 'playing' | 'gameover';
+type MatchmakingStatus = 'idle' | 'searching' | 'found' | 'error';
 
-interface ChessMoveInfo {
+interface LocalChessMoveInfo {
   from: string;
   to: string;
+  promotion?: string;
   piece?: string;
   san?: string;
+  flags?: string;
 }
 
-type GameStartData = {
+interface PlayerDetails {
+  name: string;
+  rating: number;
+}
+
+interface GameStartData {
   gameId: string;
-  isWhite: boolean;
-  fen: string;
   white: string;
   black: string;
-  moves?: string[];
-  whiteTime?: number;
-  blackTime?: number;
-  whitePlayerDetails?: {
-    name: string;
-    rating: number;
-  };
-  blackPlayerDetails?: {
-    name: string;
-    rating: number;
-  };
-};
+  fen: string;
+  moves: string[];
+  isWhite: boolean;
+  whiteTime: number;
+  blackTime: number;
+  whitePlayerDetails?: PlayerDetails;
+  blackPlayerDetails?: PlayerDetails;
+}
 
-type MoveHandlerData = {
+interface MoveHandlerData {
   fen: string;
   san: string;
   from: string;
@@ -58,72 +58,29 @@ type MoveHandlerData = {
   flags: string;
   whiteTime: number;
   blackTime: number;
-};
-
-type OpponentInfo = {
-  name: string;
-  rating: number;
-};
-
-type CustomPieces = {
-  [key: string]: any;
-};
-
-type MatchmakingStatus = 'idle' | 'searching' | 'found' | 'error';
+}
 
 const { width } = Dimensions.get('window');
 
-const MoveHistory: React.FC<{ moves: string[] }> = ({ moves }) => {
-  const pairedMoves: Array<{
-    white: string | null;
-    black: string | null;
-    number: number;
-  }> = [];
-
-  for (let i = 0; i < moves.length; i += 2) {
-    pairedMoves.push({
-      white: moves[i] || null,
-      black: moves[i + 1] || null,
-      number: Math.ceil((i + 1) / 2),
-    });
-  }
-
-  return (
-    <View style={styles.moveHistoryContainer}>
-      {pairedMoves.map((pair, idx) => (
-        <View 
-          key={idx} 
-          style={[
-            styles.moveHistoryRow, 
-            { backgroundColor: idx % 2 === 0 ? '#2C2C2C' : '#1E1E1E' }
-          ]}
-        >
-          <Text style={styles.moveNumber}>{pair.number}.</Text>
-          <Text style={styles.moveText}>{pair.white || ''}</Text>
-          <Text style={styles.moveText}>{pair.black || ''}</Text>
-        </View>
-      ))}
-    </View>
-  );
-};
-
 const GameScreen: React.FC = () => {
-  const [game, setGame] = useState<Chess>(new Chess());
+  const [game, setGame] = useState<Chess | null>(null);
   const [gameId, setGameId] = useState<string | null>(null);
   const [playerColor, setPlayerColor] = useState<PlayerColor | null>(null);
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
-  const [showResignConfirm, setShowResignConfirm] = useState(false);
-  const [opponentInfo, setOpponentInfo] = useState<OpponentInfo>({
+  const [opponentInfo, setOpponentInfo] = useState<PlayerDetails>({
     name: 'Waiting...',
     rating: 1500,
   });
   const [whiteTime, setWhiteTime] = useState<number>(0);
   const [blackTime, setBlackTime] = useState<number>(0);
+  const [gamePhase, setGamePhase] = useState<GamePhase>('matchmaking');
   const [matchmakingStatus, setMatchmakingStatus] = useState<MatchmakingStatus>('idle');
+  const [isSearching, setIsSearching] = useState(false);
   const [searchTime, setSearchTime] = useState(0);
   const [searchTimer, setSearchTimer] = useState<NodeJS.Timeout | null>(null);
   const [gameResult, setGameResult] = useState<string | null>(null);
-  
+  const [showResignConfirm, setShowResignConfirm] = useState(false);
+
   const params = useLocalSearchParams();
   const timeControl = params.timeControl ? Number(params.timeControl) : 600;
   const router = useRouter();
@@ -136,160 +93,285 @@ const GameScreen: React.FC = () => {
   }, []);
 
   const handleGameStart = useCallback((data: GameStartData) => {
-    console.log('Game start data:', data);
-    setMatchmakingStatus('found');
-    if (searchTimer) clearInterval(searchTimer);
-    
-    setGameId(data.gameId);
-    setPlayerColor(data.isWhite ? 'white' : 'black');
-    setGame(new Chess(data.fen));
-    setWhiteTime(data.whiteTime || timeControl);
-    setBlackTime(data.blackTime || timeControl);
-    setMoveHistory(data.moves || []);
-    
-    setOpponentInfo({
-      name: data.isWhite 
-        ? (data.blackPlayerDetails?.name || 'Opponent')
-        : (data.whitePlayerDetails?.name || 'Opponent'),
-      rating: data.isWhite 
-        ? (data.blackPlayerDetails?.rating || 1500)
-        : (data.whitePlayerDetails?.rating || 1500)
-    });
-  }, [searchTimer, timeControl]);
+    console.log('Game started with data:', data);
+    try {
+      const newGame = new Chess(data.fen);
+      setGame(newGame);
+      setGameId(data.gameId);
+      setPlayerColor(data.isWhite ? 'white' : 'black');
+      setWhiteTime(data.whiteTime);
+      setBlackTime(data.blackTime);
+      setMoveHistory(data.moves || []);
+      setGamePhase('playing');
+      setIsSearching(false);
+      setMatchmakingStatus('found');
 
-  const handleCancelSearch = useCallback(() => {
-    if (!socket) return;
-    
-    socket.emit('cancel_search');
-    setMatchmakingStatus('idle');
-    if (searchTimer) clearInterval(searchTimer);
-    router.back();
-  }, [socket, searchTimer]);
+      setOpponentInfo({
+        name: data.isWhite 
+          ? (data.blackPlayerDetails?.name || 'Opponent') 
+          : (data.whitePlayerDetails?.name || 'Opponent'),
+        rating: data.isWhite 
+          ? (data.blackPlayerDetails?.rating || 1500) 
+          : (data.whitePlayerDetails?.rating || 1500)
+      });
 
-  const makeMove = useCallback((info: ChessMoveInfo) => {
-    if (!gameId || !socket || !playerColor) {
-      console.log('Missing gameId, socket, or playerColor');
+      console.log(`Game started as ${data.isWhite ? 'white' : 'black'}`);
+    } catch (error) {
+      console.error('Error initializing game:', error);
+    }
+  }, []);
+
+  const handleMoveMade = useCallback((data: MoveHandlerData) => {
+    console.log('Move received from server:', data);
+    try {
+      // Always set the game to the server's version for consistency
+      const newGame = new Chess(data.fen);
+      setGame(newGame);
+      
+      // Update move history without duplicates
+      setMoveHistory(prev => {
+        if (prev.length > 0 && prev[prev.length - 1] === data.san) {
+          return prev;
+        }
+        return [...prev, data.san];
+      });
+      
+      // Update times
+      setWhiteTime(data.whiteTime);
+      setBlackTime(data.blackTime);
+    } catch (error) {
+      console.error('Error handling server move:', error);
+      // Fallback to server's position
+      setGame(new Chess(data.fen));
+    }
+  }, []);
+
+  // Fix time control
+  useEffect(() => {
+    if (gamePhase !== 'playing' || !game) return;
+    
+    const interval = setInterval(() => {
+      const isWhiteTurn = game.turn() === 'w';
+      
+      // Only decrease active player's time
+      if (isWhiteTurn) {
+        setWhiteTime(prev => Math.max(0, prev - 1));
+      } else {
+        setBlackTime(prev => Math.max(0, prev - 1));
+      }
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [gamePhase, game]);
+  
+  // Update your time control effect
+  useEffect(() => {
+    if (gamePhase !== 'playing' || !game) return;
+    
+    const interval = setInterval(() => {
+      const isWhiteTurn = game.turn() === 'w';
+      
+      // Only decrease the active player's time
+      if (isWhiteTurn) {
+        setWhiteTime(prev => Math.max(0, prev - 1));
+      } else {
+        setBlackTime(prev => Math.max(0, prev - 1));
+      }
+      
+      // Check for timeout
+      if ((isWhiteTurn && whiteTime <= 1) || (!isWhiteTurn && blackTime <= 1)) {
+        const isMyTurn = (isWhiteTurn && playerColor === 'white') || 
+                          (!isWhiteTurn && playerColor === 'black');
+        
+        // Only the player who's out of time should report it
+        if (socket && gameId && isMyTurn) {
+          socket.emit('timeout', { gameId, color: isWhiteTurn ? 'white' : 'black' });
+        }
+      }
+    }, 1000);
+  
+    return () => clearInterval(interval);
+  }, [gamePhase, game, socket, gameId, whiteTime, blackTime, playerColor]);
+
+  const handleGameEnded = useCallback((result: { 
+    winner: string | null; 
+    reason: string;
+    whiteRating?: number;
+    blackRating?: number;
+    whiteRatingChange?: number;
+    blackRatingChange?: number;
+  }) => {
+    const isWhite = playerColor === 'white';
+    const playerWon = result.winner === (isWhite ? userId : opponentInfo.name);
+    
+    let resultText = '';
+    switch (result.reason) {
+      case 'checkmate':
+        resultText = playerWon ? 'You won by checkmate!' : 'You lost by checkmate';
+        break;
+      case 'resignation':
+        resultText = playerWon ? 'Opponent resigned!' : 'You resigned';
+        break;
+      case 'timeout':
+        resultText = playerWon ? 'You won on time!' : 'You lost on time';
+        break;
+      case 'agreement':
+        resultText = 'Draw by agreement';
+        break;
+      default:
+        resultText = 'Game ended';
+    }
+
+    if (result.whiteRatingChange && result.blackRatingChange) {
+      resultText += `\nRating: ${isWhite ? result.whiteRating : result.blackRating} (${
+        (isWhite ? result.whiteRatingChange : result.blackRatingChange) > 0 ? '+' : ''
+      }${isWhite ? result.whiteRatingChange : result.blackRatingChange})`;
+    }
+
+    setGameResult(resultText);
+    setGamePhase('gameover');
+  }, [playerColor, userId, opponentInfo.name]);
+
+  const makeMove = useCallback((moveData: any) => {
+    console.log('Move attempt:', moveData);
+    
+    if (!gameId || !socket || !playerColor || !game || gamePhase !== 'playing') {
+      console.log('Move rejected - missing requirements or not in playing phase');
       return;
     }
   
-    const currentTurn = game.turn();
-    const isPlayerTurn = 
-      (currentTurn === 'w' && playerColor === 'white') || 
-      (currentTurn === 'b' && playerColor === 'black');
-
-    console.log(`Move attempt - Current turn: ${currentTurn}, Player color: ${playerColor}, Is player turn: ${isPlayerTurn}`); // Debug log
-
-    if (!isPlayerTurn) {
-      console.log('Not your turn - move rejected');
-      return;
-    }
+    try {
+      const move = moveData.move || moveData;
+      const from = move.from || move.sourceSquare || move.source;
+      const to = move.to !== move.from ? move.to : 
+                move.targetSquare || move.target || move.san?.slice(-2);
+      
+      if (!from || !to || from === to) {
+        console.log('Invalid move info - incomplete or identical squares:', { from, to });
+        return;
+      }
   
-    const moveData = {
-      gameId,
-      from: info.from,
-      to: info.to,
-      promotion: (info.to[1] === '8' || info.to[1] === '1') && 
-        game.get(info.from as Square)?.type === 'p' ? 'q' : undefined
-    };
-
-    socket.emit('make_move', moveData);
-  }, [game, gameId, socket, playerColor]);
+      const piece = game.get(from as any);
+      if (!piece) {
+        console.log('No piece at square:', from);
+        return;
+      }
+  
+      if ((piece.color === 'w' && playerColor !== 'white') || 
+          (piece.color === 'b' && playerColor !== 'black')) {
+        console.log('Not your piece');
+        return;
+      }
+  
+      if ((game.turn() === 'w' && playerColor !== 'white') ||
+          (game.turn() === 'b' && playerColor !== 'black')) {
+        console.log('Not your turn');
+        return;
+      }
+  
+      const moveObj = {
+        from,
+        to,
+        promotion: 'q'
+      };
+      
+      const result = game.move(moveObj);
+      if (!result) {
+        console.log('Illegal move');
+        return;
+      }
+      
+      console.log('Emitting move to server:', moveObj);
+      socket.emit('make_move', {
+        gameId,
+        ...moveObj
+      });
+      
+      setGame(new Chess(game.fen()));
+    } catch (error) {
+      console.error('Error in makeMove:', error);
+    }
+  }, [game, gameId, socket, playerColor, gamePhase]);
+  
 
   const handleResign = useCallback(() => {
     if (!socket || !gameId) return;
-    
     socket.emit('resign_game', gameId);
     setShowResignConfirm(false);
     setGameResult('Resigned');
+    setGamePhase('gameover');
   }, [socket, gameId]);
 
+  // Socket event handlers
+  useEffect(() => {
+    if (!socket || !token) {
+      console.log('Socket or token not available');
+      return;
+    }
   
-
-    const handleMoveMade = useCallback((data: MoveHandlerData) => {
-      console.log('Move made:', data); // Debug log
-      const newGame = new Chess(data.fen);
-      setGame(newGame);
-      setMoveHistory(prev => [...prev, data.san]);
-      setWhiteTime(data.whiteTime);
-      setBlackTime(data.blackTime);
-    }, []);
-
-    const handleGameEnded = (result: { 
-      winner: string | null; 
-      reason: string;
-      whiteRating?: number;
-      blackRating?: number;
-      whiteRatingChange?: number;
-      blackRatingChange?: number;
-    }) => {
-      const isWhite = playerColor === 'white';
-      const playerWon = result.winner === (isWhite ? userId : opponentInfo.name);
-      
-      let resultText = '';
-      switch (result.reason) {
-        case 'checkmate':
-          resultText = playerWon ? 'You won by checkmate!' : 'You lost by checkmate';
-          break;
-        case 'resignation':
-          resultText = playerWon ? 'Opponent resigned!' : 'You resigned';
-          break;
-        case 'timeout':
-          resultText = playerWon ? 'You won on time!' : 'You lost on time';
-          break;
-        case 'agreement':
-          resultText = 'Draw by agreement';
-          break;
-        default:
-          resultText = 'Game ended';
-      }
-
-      if (result.whiteRatingChange && result.blackRatingChange) {
-        resultText += `\nRating: ${isWhite ? result.whiteRating : result.blackRating} (${
-          (isWhite ? result.whiteRatingChange : result.blackRatingChange) > 0 ? '+' : ''
-        }${isWhite ? result.whiteRatingChange : result.blackRatingChange})`;
-      }
-
-      setGameResult(resultText);
-    };
-
     const handleGameWaiting = () => {
+      console.log('Game waiting - searching for opponent');
+      setIsSearching(true);
       setMatchmakingStatus('searching');
-      if (!searchTimer) {
-        const timer = setInterval(() => {
-          setSearchTime(prev => prev + 1);
-        }, 1000);
-        setSearchTimer(timer);
-      }
+      const timer = setInterval(() => setSearchTime(prev => prev + 1), 1000);
+      setSearchTimer(timer);
     };
-
-    useEffect(() => {
-      if (!socket) return;
-
-    socket.on('game_start', handleGameStart);
+  
+    const handleGameStartWrapper = (data: GameStartData) => {
+      if (gameId === data.gameId && gamePhase === 'playing') {
+        console.log('Game already initialized, skipping duplicate start');
+        return;
+      }
+      handleGameStart(data);
+    };
+  
+    socket.on('game_waiting', handleGameWaiting);
+    socket.on('game_start', handleGameStartWrapper);
     socket.on('move_made', handleMoveMade);
     socket.on('game_ended', handleGameEnded);
-    socket.on('game_waiting', handleGameWaiting);
-    socket.on('matchmaking_error', () => {
+    socket.on('matchmaking_error', (error: string) => {
+      console.log('Matchmaking error:', error);
+      setIsSearching(false);
       setMatchmakingStatus('error');
       if (searchTimer) clearInterval(searchTimer);
     });
-
-    socket.emit('find_game', timeControl);
-
+    socket.on('connect', () => console.log('Socket connected'));
+    socket.on('disconnect', () => console.log('Socket disconnected'));
+    socket.on('connect_error', (err) => console.log('Socket error:', err));
+  
+    if (!isSearching) {
+      console.log('Starting game search with time control:', timeControl);
+      socket.emit('find_game', timeControl);
+    }
+  
     return () => {
-      socket.off('game_start', handleGameStart);
+      socket.off('game_waiting', handleGameWaiting);
+      socket.off('game_start', handleGameStartWrapper);
       socket.off('move_made', handleMoveMade);
       socket.off('game_ended', handleGameEnded);
-      socket.off('game_waiting', handleGameWaiting);
       socket.off('matchmaking_error');
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('connect_error');
       if (searchTimer) clearInterval(searchTimer);
-      if (matchmakingStatus === 'searching') {
-        socket.emit('cancel_search');
-      }
+      if (isSearching) socket.emit('cancel_search');
+      if (gameId) socket.emit('leave_game', gameId);
     };
-  }, [socket, timeControl, handleGameStart, handleMoveMade]);
+  }, [socket, token, timeControl, isSearching, gameId, gamePhase, handleGameStart, handleMoveMade, handleGameEnded]);
 
-  const customPieces: CustomPieces = {
+  // Time control effect
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (gamePhase !== 'playing' || !game) return;
+      
+      setWhiteTime(prev => Math.max(0, prev - 1));
+      setBlackTime(prev => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [gamePhase, game]);
+
+  const customPieces = {
     wK: require('@/assets/images/king-white.svg'),
     wQ: require('@/assets/images/queen-white.svg'),
     wB: require('@/assets/images/bishop-white.svg'),
@@ -304,19 +386,55 @@ const GameScreen: React.FC = () => {
     bR: require('@/assets/images/black-rook.svg'),
   };
 
+  const MoveHistory: React.FC<{ moves: string[] }> = ({ moves }) => {
+    const pairedMoves = [];
+    for (let i = 0; i < moves.length; i += 2) {
+      pairedMoves.push({
+        white: moves[i] || null,
+        black: moves[i + 1] || null,
+        number: Math.ceil((i + 1) / 2),
+      });
+    }
+
+    return (
+      <View style={styles.moveHistoryContainer}>
+        {pairedMoves.map((pair, idx) => (
+          <View 
+            key={idx} 
+            style={[
+              styles.moveHistoryRow, 
+              { backgroundColor: idx % 2 === 0 ? '#2C2C2C' : '#1E1E1E' }
+            ]}
+          >
+            <Text style={styles.moveNumber}>{pair.number}.</Text>
+            <Text style={styles.moveText}>{pair.white || ''}</Text>
+            <Text style={styles.moveText}>{pair.black || ''}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <View style={styles.container}>
-      {matchmakingStatus !== 'found' ? (
+  
+      {gamePhase === 'matchmaking' ? (
         <View style={styles.searchingContainer}>
           {matchmakingStatus === 'searching' ? (
             <>
               <Text style={styles.searchingText}>
                 Searching for opponent... {formatTime(searchTime)}
+                {'\n'}(Time Control: {timeControl / 60}+0)
               </Text>
               <ActivityIndicator size="large" color="#4CAF50" />
               <TouchableOpacity 
                 style={styles.cancelButton}
-                onPress={handleCancelSearch}
+                onPress={() => {
+                  socket?.emit('cancel_search');
+                  setIsSearching(false);
+                  router.back();
+                }}
               >
                 <Text style={styles.cancelButtonText}>Cancel Search</Text>
               </TouchableOpacity>
@@ -326,14 +444,17 @@ const GameScreen: React.FC = () => {
               <Text style={styles.errorText}>Error finding opponent</Text>
               <TouchableOpacity 
                 style={styles.retryButton}
-                onPress={() => socket?.emit('find_game', timeControl)}
+                onPress={() => {
+                  setSearchTime(0);
+                  socket?.emit('find_game', timeControl);
+                }}
               >
                 <Text style={styles.retryButtonText}>Try Again</Text>
               </TouchableOpacity>
             </>
           ) : null}
         </View>
-      ) : (
+      ) : gamePhase === 'playing' ? (
         <>
           <View style={styles.playerInfoTop}>
             <View style={styles.playerDetails}>
@@ -353,16 +474,13 @@ const GameScreen: React.FC = () => {
             </View>
           </View>
 
-          {playerColor && (
-            <Chessboard
-              fen={game.fen()}
-              orientation={playerColor}
-              onMove={makeMove}
-              customPieces={customPieces}
-              // Disable interaction when it's not the player's turn
-              isInteractive={game.turn() === (playerColor === 'white' ? 'w' : 'b')}
-            />
-          )}
+          {console.log('Attempting to render Chessboard:', { fen: game?.fen() })}
+          {gamePhase === 'playing' && game && (
+          <Chessboard
+            fen={game.fen()}
+            onMove={makeMove}
+          />
+        )}
 
           <View style={styles.playerInfoBottom}>
             <View style={styles.playerDetails}>
@@ -374,7 +492,7 @@ const GameScreen: React.FC = () => {
                 <Text style={styles.playerName}>You</Text>
                 <Text style={styles.playerRating}>1500</Text>
                 <Text style={styles.turnIndicator}>
-                  {game.turn() === (playerColor === 'white' ? 'w' : 'b') 
+                  {game?.turn() === (playerColor === 'white' ? 'w' : 'b') 
                     ? 'Your turn' 
                     : 'Waiting...'}
                 </Text>
@@ -387,6 +505,8 @@ const GameScreen: React.FC = () => {
             </View>
           </View>
 
+          
+
           <View style={styles.controlsContainer}>
             <MoveHistory moves={moveHistory} />
             <TouchableOpacity 
@@ -396,48 +516,55 @@ const GameScreen: React.FC = () => {
               <Text style={styles.resignButtonText}>Resign Game</Text>
             </TouchableOpacity>
           </View>
-
-          <Modal
-            transparent={true}
-            visible={showResignConfirm || !!gameResult}
-            animationType="slide"
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContainer}>
-                <Text style={styles.modalText}>
-                  {gameResult || 'Are you sure you want to resign?'}
-                </Text>
-                <View style={styles.modalButtons}>
-                  {gameResult ? (
-                    <TouchableOpacity 
-                      style={[styles.modalButton, styles.confirmButton]}
-                      onPress={() => router.back()}
-                    >
-                      <Text style={styles.modalButtonText}>Return to Menu</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <>
-                      <TouchableOpacity 
-                        style={[styles.modalButton, styles.confirmButton]}
-                        onPress={handleResign}
-                      >
-                        <Text style={styles.modalButtonText}>Confirm</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={[styles.modalButton, styles.cancelButton]}
-                        onPress={() => setShowResignConfirm(false)}
-                      >
-                        <Text style={styles.modalButtonText}>Cancel</Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
-              </View>
-            </View>
-          </Modal>
         </>
+      ) : (
+        <View style={styles.resultContainer}>
+          <Text style={[
+            styles.resultText,
+            gameResult?.includes('won') ? styles.resultText : 
+            gameResult?.includes('lost') ? styles.resultText : 
+            styles.resultText
+          ]}>
+            {gameResult}
+          </Text>
+          <TouchableOpacity 
+            style={styles.returnButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.returnButtonText}>Return to Menu</Text>
+          </TouchableOpacity>
+        </View>
       )}
+
+      <Modal
+        transparent={true}
+        visible={showResignConfirm}
+        animationType="slide"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalText}>
+              Are you sure you want to resign?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleResign}
+              >
+                <Text style={styles.modalButtonText}>Confirm</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowResignConfirm(false)}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
+    </GestureHandlerRootView>
   );
 };
 
@@ -569,6 +696,17 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
+  returnButton: {
+    backgroundColor: '#FF4444',
+    padding: 15,
+    margin: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  returnButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
   resignButton: {
     backgroundColor: '#FF4444',
     padding: 15,
@@ -624,6 +762,21 @@ const styles = StyleSheet.create({
     marginVertical: 8,
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  resultContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#1e1e1e',
+    padding: 20,
+  },
+  resultText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 36, // For better multiline text display
   },
 });
 
