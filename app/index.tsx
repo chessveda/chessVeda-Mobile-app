@@ -31,6 +31,7 @@ export default function Index() {
         console.warn("Error checking authentication:", error);
       } finally {
         setIsChecking(false);
+        setShowSplash(false);
       }
     };
 

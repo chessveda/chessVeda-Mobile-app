@@ -8,7 +8,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 
-const API_URL = "http://172.16.0.109:8080";
+const API_URL = "http://172.16.0.120:8080";
 LogBox.ignoreAllLogs();
 
 export default function AuthFlow() {

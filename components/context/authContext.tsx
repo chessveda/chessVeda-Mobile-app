@@ -49,7 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     console.log('Initializing new socket connection...');
-    const newSocket = io('http://172.16.0.109:8080', {
+    const newSocket = io('http://172.16.0.120:8080', {
       auth: { token },
       reconnection: true,
       reconnectionAttempts: 5, // Limit reconnection attempts

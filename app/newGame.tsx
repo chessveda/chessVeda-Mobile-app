@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -7,7 +7,8 @@ import {
   TouchableOpacity, 
   Modal, 
   Dimensions, 
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { Chess } from 'chess.js';
 import Chessboard from 'react-native-chessboard';
@@ -23,14 +24,6 @@ type PlayerColor = 'white' | 'black';
 type GamePhase = 'matchmaking' | 'playing' | 'gameover';
 type MatchmakingStatus = 'idle' | 'searching' | 'found' | 'error';
 
-interface LocalChessMoveInfo {
-  from: string;
-  to: string;
-  promotion?: string;
-  piece?: string;
-  san?: string;
-  flags?: string;
-}
 
 interface PlayerDetails {
   name: string;
@@ -80,11 +73,14 @@ const GameScreen: React.FC = () => {
   const [searchTimer, setSearchTimer] = useState<NodeJS.Timeout | null>(null);
   const [gameResult, setGameResult] = useState<string | null>(null);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
-
+  const [boardFen, setBoardFen] = useState<string>('start');
+  const resignTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const findGameSent = useRef<boolean>(false);
   const params = useLocalSearchParams();
   const timeControl = params.timeControl ? Number(params.timeControl) : 600;
   const router = useRouter();
   const { userId, token, socket } = useContext(AuthContext);
+  
 
   const formatTime = useCallback((seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
@@ -98,24 +94,38 @@ const GameScreen: React.FC = () => {
       const newGame = new Chess(data.fen);
       setGame(newGame);
       setGameId(data.gameId);
-      setPlayerColor(data.isWhite ? 'white' : 'black');
+      setBoardFen(newGame.fen());
+      
+      // Set player color based on backend assignment
+      const isWhite = data.isWhite;
+      setPlayerColor(isWhite ? 'white' : 'black');
+      
+      // Initialize times from backend
       setWhiteTime(data.whiteTime);
       setBlackTime(data.blackTime);
-      setMoveHistory(data.moves || []);
+      
+      // Ensure proper move history
+      if (data.moves && Array.isArray(data.moves)) {
+        setMoveHistory(data.moves);
+      } else {
+        setMoveHistory([]);
+      }
+      
       setGamePhase('playing');
       setIsSearching(false);
       setMatchmakingStatus('found');
-
+  
+      // Set opponent info based on color assignment
       setOpponentInfo({
-        name: data.isWhite 
+        name: isWhite 
           ? (data.blackPlayerDetails?.name || 'Opponent') 
           : (data.whitePlayerDetails?.name || 'Opponent'),
-        rating: data.isWhite 
+        rating: isWhite 
           ? (data.blackPlayerDetails?.rating || 1500) 
           : (data.whitePlayerDetails?.rating || 1500)
       });
-
-      console.log(`Game started as ${data.isWhite ? 'white' : 'black'}`);
+  
+      console.log(`Game started as ${isWhite ? 'white' : 'black'}`);
     } catch (error) {
       console.error('Error initializing game:', error);
     }
@@ -124,74 +134,59 @@ const GameScreen: React.FC = () => {
   const handleMoveMade = useCallback((data: MoveHandlerData) => {
     console.log('Move received from server:', data);
     try {
-      // Always set the game to the server's version for consistency
+      // Always sync with server's game state to ensure consistency
       const newGame = new Chess(data.fen);
       setGame(newGame);
+      setBoardFen(data.fen); // Use the exact FEN from server
       
-      // Update move history without duplicates
-      setMoveHistory(prev => {
-        if (prev.length > 0 && prev[prev.length - 1] === data.san) {
-          return prev;
+      // Update move history from server's data
+      setMoveHistory(prevMoves => {
+        const lastMove = prevMoves[prevMoves.length - 1];
+        // If this is a new move, add it to the history
+        if (data.san && lastMove !== data.san) {
+          return [...prevMoves, data.san];
         }
-        return [...prev, data.san];
+        return prevMoves;
       });
       
-      // Update times
+      // Always sync with server times
       setWhiteTime(data.whiteTime);
       setBlackTime(data.blackTime);
     } catch (error) {
       console.error('Error handling server move:', error);
-      // Fallback to server's position
-      setGame(new Chess(data.fen));
+      // Fallback to server's position in case of error
+      if (data.fen) {
+        setGame(new Chess(data.fen));
+        setBoardFen(data.fen);
+      }
     }
   }, []);
 
-  // Fix time control
+  // Single time control effect that handles both players' clocks
   useEffect(() => {
     if (gamePhase !== 'playing' || !game) return;
     
     const interval = setInterval(() => {
-      const isWhiteTurn = game.turn() === 'w';
-      
-      // Only decrease active player's time
-      if (isWhiteTurn) {
+      // Only decrement time for the player whose turn it is
+      if (game.turn() === 'w') {
         setWhiteTime(prev => Math.max(0, prev - 1));
-      } else {
-        setBlackTime(prev => Math.max(0, prev - 1));
-      }
-    }, 1000);
-    
-    return () => clearInterval(interval);
-  }, [gamePhase, game]);
-  
-  // Update your time control effect
-  useEffect(() => {
-    if (gamePhase !== 'playing' || !game) return;
-    
-    const interval = setInterval(() => {
-      const isWhiteTurn = game.turn() === 'w';
-      
-      // Only decrease the active player's time
-      if (isWhiteTurn) {
-        setWhiteTime(prev => Math.max(0, prev - 1));
-      } else {
-        setBlackTime(prev => Math.max(0, prev - 1));
-      }
-      
-      // Check for timeout
-      if ((isWhiteTurn && whiteTime <= 1) || (!isWhiteTurn && blackTime <= 1)) {
-        const isMyTurn = (isWhiteTurn && playerColor === 'white') || 
-                          (!isWhiteTurn && playerColor === 'black');
         
-        // Only the player who's out of time should report it
-        if (socket && gameId && isMyTurn) {
-          socket.emit('timeout', { gameId, color: isWhiteTurn ? 'white' : 'black' });
+        // Check for white timeout
+        if (whiteTime <= 1 && socket && gameId && playerColor === 'black') {
+          socket.emit('timeout', { gameId, color: 'white' });
+        }
+      } else {
+        setBlackTime(prev => Math.max(0, prev - 1));
+        
+        // Check for black timeout
+        if (blackTime <= 1 && socket && gameId && playerColor === 'white') {
+          socket.emit('timeout', { gameId, color: 'black' });
         }
       }
     }, 1000);
-  
+    
     return () => clearInterval(interval);
-  }, [gamePhase, game, socket, gameId, whiteTime, blackTime, playerColor]);
+  }, [gamePhase, game, whiteTime, blackTime, socket, gameId, playerColor]);
 
   const handleGameEnded = useCallback((result: { 
     winner: string | null; 
@@ -202,7 +197,8 @@ const GameScreen: React.FC = () => {
     blackRatingChange?: number;
   }) => {
     const isWhite = playerColor === 'white';
-    const playerWon = result.winner === (isWhite ? userId : opponentInfo.name);
+    const playerWon = (result.winner === userId) || 
+                     (result.winner === (isWhite ? 'white' : 'black'));
     
     let resultText = '';
     switch (result.reason) {
@@ -218,158 +214,256 @@ const GameScreen: React.FC = () => {
       case 'agreement':
         resultText = 'Draw by agreement';
         break;
+      case 'stalemate':
+        resultText = 'Draw by stalemate';
+        break;
+      case 'insufficient':
+        resultText = 'Draw by insufficient material';
+        break;
+      case 'fifty':
+        resultText = 'Draw by fifty-move rule';
+        break;
+      case 'repetition':
+        resultText = 'Draw by threefold repetition';
+        break;
       default:
         resultText = 'Game ended';
     }
 
     if (result.whiteRatingChange && result.blackRatingChange) {
-      resultText += `\nRating: ${isWhite ? result.whiteRating : result.blackRating} (${
-        (isWhite ? result.whiteRatingChange : result.blackRatingChange) > 0 ? '+' : ''
-      }${isWhite ? result.whiteRatingChange : result.blackRatingChange})`;
+      const ratingChange = isWhite ? result.whiteRatingChange : result.blackRatingChange;
+      const newRating = isWhite ? result.whiteRating : result.blackRating;
+      
+      if (newRating) {
+        resultText += `\nRating: ${newRating} (${ratingChange > 0 ? '+' : ''}${ratingChange})`;
+      }
     }
 
     setGameResult(resultText);
     setGamePhase('gameover');
-  }, [playerColor, userId, opponentInfo.name]);
+  }, [playerColor, userId]);
 
   const makeMove = useCallback((moveData: any) => {
-    console.log('Move attempt:', moveData);
-    
     if (!gameId || !socket || !playerColor || !game || gamePhase !== 'playing') {
-      console.log('Move rejected - missing requirements or not in playing phase');
-      return;
+      return false;
     }
   
     try {
       const move = moveData.move || moveData;
-      const from = move.from || move.sourceSquare || move.source;
-      const to = move.to !== move.from ? move.to : 
-                move.targetSquare || move.target || move.san?.slice(-2);
+      const from = move.from || move.sourceSquare;
+      const to = move.to || move.targetSquare;
       
-      if (!from || !to || from === to) {
-        console.log('Invalid move info - incomplete or identical squares:', { from, to });
-        return;
+      if (!from || !to) return false;
+  
+      const piece = game.get(from);
+      if (!piece) return false;
+  
+      // Validate it's the player's turn and piece
+      const isPieceWhite = piece.color === 'w';
+      if ((isPieceWhite && playerColor !== 'white') || 
+          (!isPieceWhite && playerColor !== 'black')) {
+        return false;
       }
   
-      const piece = game.get(from as any);
-      if (!piece) {
-        console.log('No piece at square:', from);
-        return;
-      }
-  
-      if ((piece.color === 'w' && playerColor !== 'white') || 
-          (piece.color === 'b' && playerColor !== 'black')) {
-        console.log('Not your piece');
-        return;
-      }
-  
+      // Validate it's the correct turn
       if ((game.turn() === 'w' && playerColor !== 'white') ||
           (game.turn() === 'b' && playerColor !== 'black')) {
-        console.log('Not your turn');
-        return;
+        return false;
       }
   
-      const moveObj = {
-        from,
-        to,
-        promotion: 'q'
-      };
+      // Check for pawn promotion
+      const isPromotion = 
+        piece.type === 'p' && 
+        ((to[1] === '8' && piece.color === 'w') || 
+         (to[1] === '1' && piece.color === 'b'));
       
+      const promotion = isPromotion ? (move.promotion || 'q') : undefined;
+      
+      const moveObj = { from, to, promotion };
+      
+      // Try the move locally first
       const result = game.move(moveObj);
-      if (!result) {
-        console.log('Illegal move');
-        return;
-      }
+      if (!result) return false;
       
-      console.log('Emitting move to server:', moveObj);
+      // Update board state immediately
+      setBoardFen(game.fen());
+      
+      // Emit move to server with all required fields
       socket.emit('make_move', {
         gameId,
-        ...moveObj
+        from,
+        to,
+        promotion: moveObj.promotion
       });
       
+      // Update local state optimistically
       setGame(new Chess(game.fen()));
+      
+      // Optimistically add move to history
+      if (result.san) {
+        setMoveHistory(prev => [...prev, result.san]);
+      }
+      
+      return true;
     } catch (error) {
       console.error('Error in makeMove:', error);
+      return false;
     }
   }, [game, gameId, socket, playerColor, gamePhase]);
+
+  const handleResign = () => {
+    if (!socket || !gameId || gamePhase !== "playing") {
+      console.log('Cannot resign - missing socket, gameId, or wrong game phase');
+      return;
+    }
   
-
-  const handleResign = useCallback(() => {
-    if (!socket || !gameId) return;
-    socket.emit('resign_game', gameId);
     setShowResignConfirm(false);
-    setGameResult('Resigned');
-    setGamePhase('gameover');
-  }, [socket, gameId]);
-
-  // Socket event handlers
+    
+    // Clear any existing timeout
+    if (resignTimeoutRef.current) {
+      clearTimeout(resignTimeoutRef.current);
+    }
+  
+    // Start a longer timeout (10 seconds instead of 5)
+    resignTimeoutRef.current = setTimeout(() => {
+      if (gamePhase === 'playing') { // Only show error if still in playing state
+        setGameResult("Error: Resignation timed out. Please try again.");
+      }
+    }, 10000);
+  
+    // Emit resign event
+    socket.emit("resign", { gameId }, (acknowledgement: { success?: boolean, error?: string }) => {
+      // Handle server acknowledgement if using callbacks
+      if (acknowledgement?.error) {
+        console.log('Resign error:', acknowledgement.error);
+        setGameResult(`Resignation failed: ${acknowledgement.error}`);
+      }
+    });
+  };
+  
+  // Main initialization effect
   useEffect(() => {
     if (!socket || !token) {
       console.log('Socket or token not available');
       return;
     }
-  
+    
+    // Only find game once when component mounts
+    if (gamePhase === 'matchmaking' && !findGameSent.current) {
+      console.log('Starting game search with time control:', timeControl);
+      socket.emit('find_game', timeControl); // Pass timeControl directly
+      findGameSent.current = true;
+      setIsSearching(true);
+      setMatchmakingStatus('searching');
+      
+      // Start search timer
+      const timer = setInterval(() => setSearchTime(prev => prev + 1), 1000);
+      setSearchTimer(timer);
+    }
+    
+    // Setup event handlers
     const handleGameWaiting = () => {
       console.log('Game waiting - searching for opponent');
       setIsSearching(true);
       setMatchmakingStatus('searching');
-      const timer = setInterval(() => setSearchTime(prev => prev + 1), 1000);
-      setSearchTimer(timer);
     };
-  
+    
     const handleGameStartWrapper = (data: GameStartData) => {
-      if (gameId === data.gameId && gamePhase === 'playing') {
-        console.log('Game already initialized, skipping duplicate start');
-        return;
+      console.log('Game start event received:', data);
+      
+      // Clear search timer if it exists
+      if (searchTimer) {
+        clearInterval(searchTimer);
+        setSearchTimer(null);
       }
+      
       handleGameStart(data);
     };
-  
-    socket.on('game_waiting', handleGameWaiting);
-    socket.on('game_start', handleGameStartWrapper);
-    socket.on('move_made', handleMoveMade);
-    socket.on('game_ended', handleGameEnded);
-    socket.on('matchmaking_error', (error: string) => {
+    
+    const handleMatchmakingError = (error: string) => {
       console.log('Matchmaking error:', error);
       setIsSearching(false);
       setMatchmakingStatus('error');
       if (searchTimer) clearInterval(searchTimer);
+      findGameSent.current = false; // Reset flag to allow retry
+    };
+    
+    // Register all event listeners
+    socket.on('game_waiting', handleGameWaiting);
+    socket.on('game_start', handleGameStartWrapper);
+    socket.on('move_made', handleMoveMade);
+    socket.on('game_ended', handleGameEnded);
+    socket.on('matchmaking_error', handleMatchmakingError);
+    
+    socket.on('connect', () => {
+      console.log('Socket connected');
+      // If we're still in matchmaking phase on reconnect, try again
+      if (gamePhase === 'matchmaking' && !findGameSent.current) {
+        socket.emit('find_game', timeControl);
+        findGameSent.current = true;
+      }
     });
-    socket.on('connect', () => console.log('Socket connected'));
+    
     socket.on('disconnect', () => console.log('Socket disconnected'));
     socket.on('connect_error', (err) => console.log('Socket error:', err));
-  
-    if (!isSearching) {
-      console.log('Starting game search with time control:', timeControl);
-      socket.emit('find_game', timeControl);
-    }
-  
+    
+    // Cleanup function
     return () => {
+      // Remove all event listeners
       socket.off('game_waiting', handleGameWaiting);
       socket.off('game_start', handleGameStartWrapper);
       socket.off('move_made', handleMoveMade);
       socket.off('game_ended', handleGameEnded);
-      socket.off('matchmaking_error');
+      socket.off('matchmaking_error', handleMatchmakingError);
       socket.off('connect');
       socket.off('disconnect');
       socket.off('connect_error');
-      if (searchTimer) clearInterval(searchTimer);
-      if (isSearching) socket.emit('cancel_search');
-      if (gameId) socket.emit('leave_game', gameId);
-    };
-  }, [socket, token, timeControl, isSearching, gameId, gamePhase, handleGameStart, handleMoveMade, handleGameEnded]);
-
-  // Time control effect
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (gamePhase !== 'playing' || !game) return;
       
-      setWhiteTime(prev => Math.max(0, prev - 1));
-      setBlackTime(prev => Math.max(0, prev - 1));
-    }, 1000);
+      // Clear timers
+      if (searchTimer) clearInterval(searchTimer);
+      
+      // Cancel search if we're still searching
+      if (isSearching) socket.emit('cancel_search');
+      
+      // Leave game if we're in one
+      if (gameId && gamePhase !== 'gameover') socket.emit('leave_game', { gameId });
+    };
+  }, [socket, token, gamePhase, timeControl, searchTimer, handleGameStart, handleMoveMade, handleGameEnded, gameId]);
 
-    return () => clearInterval(timer);
-  }, [gamePhase, game]);
+  // Handle resign responses
+  useEffect(() => {
+    if (!socket || !gameId) return;
+
+    const handleResignSuccess = (data: { winner: PlayerColor }) => {
+      if (resignTimeoutRef.current) {
+        clearTimeout(resignTimeoutRef.current);
+        resignTimeoutRef.current = null;
+      }
+    
+      const resultText = data.winner === playerColor 
+        ? "Opponent resigned. You won!" 
+        : "You resigned. You lost.";
+    
+      setGameResult(resultText);
+      setGamePhase("gameover");
+    };
+  
+    const handleResignError = (error: { message: string }) => {
+      if (resignTimeoutRef.current) {
+        clearTimeout(resignTimeoutRef.current);
+        resignTimeoutRef.current = null;
+      }
+      setGameResult(`Resignation failed: ${error.message}`);
+    };
+    
+    socket.on('resign_failed', handleResignError);
+    socket.on("resign_success", handleResignSuccess);
+  
+    return () => {
+      socket.off("resign_success", handleResignSuccess);
+      socket.off('resign_failed', handleResignError);
+    };
+  }, [socket, gameId, playerColor]);
 
   const customPieces = {
     wK: require('@/assets/images/king-white.svg'),
@@ -397,18 +491,12 @@ const GameScreen: React.FC = () => {
     }
 
     return (
-      <View style={styles.moveHistoryContainer}>
-        {pairedMoves.map((pair, idx) => (
-          <View 
-            key={idx} 
-            style={[
-              styles.moveHistoryRow, 
-              { backgroundColor: idx % 2 === 0 ? '#2C2C2C' : '#1E1E1E' }
-            ]}
-          >
-            <Text style={styles.moveNumber}>{pair.number}.</Text>
-            <Text style={styles.moveText}>{pair.white || ''}</Text>
-            <Text style={styles.moveText}>{pair.black || ''}</Text>
+      <View style={{ flexDirection: 'column' }}>
+        {pairedMoves.map((pair, index) => (
+          <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 4 }}>
+            <Text style={{ flex: 1 }}>{pair.number}.</Text>
+            <Text style={{ flex: 2 }}>{pair.white || ''}</Text>
+            <Text style={{ flex: 2 }}>{pair.black || ''}</Text>
           </View>
         ))}
       </View>
@@ -476,10 +564,16 @@ const GameScreen: React.FC = () => {
 
           {console.log('Attempting to render Chessboard:', { fen: game?.fen() })}
           {gamePhase === 'playing' && game && (
-          <Chessboard
-            fen={game.fen()}
-            onMove={makeMove}
-          />
+         <Chessboard
+         {...{
+           key: boardFen,
+           fen: boardFen,
+           onMove: makeMove,
+           boardOrientation: playerColor || 'white',
+           customPieces,
+           animationDuration: 200
+         } as any}
+       />
         )}
 
           <View style={styles.playerInfoBottom}>
@@ -510,11 +604,12 @@ const GameScreen: React.FC = () => {
           <View style={styles.controlsContainer}>
             <MoveHistory moves={moveHistory} />
             <TouchableOpacity 
-              style={styles.resignButton} 
-              onPress={() => setShowResignConfirm(true)}
-            >
-              <Text style={styles.resignButtonText}>Resign Game</Text>
-            </TouchableOpacity>
+  style={styles.resignButton} 
+  onPress={() => setShowResignConfirm(true)}
+  disabled={gamePhase !== 'playing'} // Disable if game not active
+>
+  <Text style={styles.resignButtonText}>Resign Game</Text>
+</TouchableOpacity>
           </View>
         </>
       ) : (
@@ -536,33 +631,35 @@ const GameScreen: React.FC = () => {
         </View>
       )}
 
-      <Modal
-        transparent={true}
-        visible={showResignConfirm}
-        animationType="slide"
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalText}>
-              Are you sure you want to resign?
-            </Text>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.confirmButton]}
-                onPress={handleResign}
-              >
-                <Text style={styles.modalButtonText}>Confirm</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowResignConfirm(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+<Modal
+  transparent={true}
+  visible={showResignConfirm}
+  animationType="slide"
+  onRequestClose={() => setShowResignConfirm(false)}
+>
+  <View style={styles.modalOverlay}>
+    <View style={styles.modalContainer}>
+      <Text style={styles.modalText}>
+        Are you sure you want to resign?
+      </Text>
+      <View style={styles.modalButtons}>
+        <TouchableOpacity 
+          style={[styles.modalButton, styles.confirmButton]}
+          onPress={handleResign}
+          disabled={gamePhase !== 'playing'} // Disable if game ended
+        >
+          <Text style={styles.modalButtonText}>Confirm Resign</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.modalButton, styles.cancelButton]}
+          onPress={() => setShowResignConfirm(false)}
+        >
+          <Text style={styles.modalButtonText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
     </View>
     </GestureHandlerRootView>
   );
@@ -708,11 +805,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   resignButton: {
-    backgroundColor: '#FF4444',
-    padding: 15,
-    margin: 15,
-    borderRadius: 10,
+    backgroundColor: '#ff3b30',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
     alignItems: 'center',
+    opacity: 1,
+  },
+  resignButtonDisabled: {
+    opacity: 0.5,
   },
   resignButtonText: {
     color: 'white',
