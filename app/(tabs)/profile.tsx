@@ -15,7 +15,7 @@ import axios from "axios";
 
 import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/Ionicons';
-const API_URL = "http://172.16.0.102:8080";
+const API_URL = "http://172.16.0.127:8080";
 
 
 

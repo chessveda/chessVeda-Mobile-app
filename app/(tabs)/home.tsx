@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '@/components/context/authContext';
 import { Redirect } from 'expo-router';
 
-const API_URL = "http://172.16.0.102:8080";
+const API_URL = "http://172.16.0.127:8080";
 
 const styles = StyleSheet.create({
   container: {
