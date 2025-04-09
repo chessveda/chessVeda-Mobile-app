@@ -245,6 +245,7 @@ const GameScreen: React.FC = () => {
 
   const makeMove = useCallback((moveData: any) => {
     if (!gameId || !socket || !playerColor || !game || gamePhase !== 'playing') {
+      console.log('Invalid move conditions');
       return false;
     }
   
@@ -253,21 +254,29 @@ const GameScreen: React.FC = () => {
       const from = move.from || move.sourceSquare;
       const to = move.to || move.targetSquare;
       
-      if (!from || !to) return false;
+      if (!from || !to) {
+        console.log('Missing from/to in move data');
+        return false;
+      }
   
+      // Get the piece being moved
       const piece = game.get(from);
-      if (!piece) return false;
+      if (!piece) {
+        console.log('No piece at source square');
+        return false;
+      }
   
-      // Validate it's the player's turn and piece
-      const isPieceWhite = piece.color === 'w';
-      if ((isPieceWhite && playerColor !== 'white') || 
-          (!isPieceWhite && playerColor !== 'black')) {
+      // Validate piece color matches player color
+      const pieceColor = piece.color === 'w' ? 'white' : 'black';
+      if (pieceColor !== playerColor) {
+        console.log(`Invalid move: Player (${playerColor}) cannot move ${pieceColor} pieces`);
         return false;
       }
   
       // Validate it's the correct turn
-      if ((game.turn() === 'w' && playerColor !== 'white') ||
-          (game.turn() === 'b' && playerColor !== 'black')) {
+      const currentTurn = game.turn() === 'w' ? 'white' : 'black';
+      if (currentTurn !== playerColor) {
+        console.log(`Invalid move: Not player's turn (current turn: ${currentTurn})`);
         return false;
       }
   
@@ -283,7 +292,10 @@ const GameScreen: React.FC = () => {
       
       // Try the move locally first
       const result = game.move(moveObj);
-      if (!result) return false;
+      if (!result) {
+        console.log('Invalid chess move');
+        return false;
+      }
       
       // Update board state immediately
       setBoardFen(game.fen());
@@ -332,11 +344,17 @@ const GameScreen: React.FC = () => {
     }, 10000);
   
     // Emit resign event
-    socket.emit("resign", { gameId }, (acknowledgement: { success?: boolean, error?: string }) => {
-      // Handle server acknowledgement if using callbacks
+    socket.emit("resign_game", gameId, (acknowledgement: { success?: boolean, error?: string }) => {
+      // Clear timeout on response
+      if (resignTimeoutRef.current) {
+        clearTimeout(resignTimeoutRef.current);
+        resignTimeoutRef.current = null;
+      }
+  
       if (acknowledgement?.error) {
         console.log('Resign error:', acknowledgement.error);
         setGameResult(`Resignation failed: ${acknowledgement.error}`);
+        setGamePhase('gameover');
       }
     });
   };
