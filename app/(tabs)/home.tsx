@@ -9,9 +9,14 @@ import rapid from '@/assets/images/rapid.png';
 import logo from "@/assets/images/logo-icon.png";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '@/components/context/authContext';
-import { Redirect } from 'expo-router';
+import { UserProfile, TimeControlType } from "@/types/types";
+// import { EXPO_PUBLIC_API_URL } from '@env';
+import GameScreen from '../newGame';
+import { useAuth } from '@/hooks/authHook';
+import { useRouter } from 'expo-router';
 
-const API_URL = "http://172.16.0.127:8080";
+const API_URL = "http://172.16.0.120:8080"
+
 
 const styles = StyleSheet.create({
   container: {
@@ -288,7 +293,7 @@ const styles = StyleSheet.create({
   
 });
 
-const GameModeModal = ({ modalVisible, setModalVisible, handlePlay, isSearching, setIsSearching }) => {
+const GameModeModal = ({ modalVisible, setModalVisible, handlePlay, isSearching, setIsSearching } : any) => {
   const [selectedTime, setSelectedTime] = useState(10 * 60);
   const [opponent, setOpponent] = useState('human'); // 'human' or 'bot'
   const [timeDropdownOpen, setTimeDropdownOpen] = useState(false);
@@ -312,11 +317,11 @@ const GameModeModal = ({ modalVisible, setModalVisible, handlePlay, isSearching,
   };
 
   // Prevent closing when tapping on modal content
-  const handleModalContentPress = (e) => {
+  const handleModalContentPress = (e : any) => {
     e.stopPropagation();
   };
 
-  const selectTimeOption = (option) => {
+  const selectTimeOption = (option : any) => {
     setSelectedTime(option.value);
     setTimeDropdownOpen(false);
   };
@@ -427,9 +432,12 @@ const GameModeModal = ({ modalVisible, setModalVisible, handlePlay, isSearching,
 };
 
 const StatsCard = () => {
-  const [profile, setProfile] = useState(null);
-  const auth = useContext(AuthContext);
-
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+    const auth = useContext(AuthContext);
+    const userId = useContext(AuthContext);
+    const router = useRouter();
+    
+  
   useEffect(() => {
     if (!auth?.userId) {
       console.log("User ID is still null, waiting...");
@@ -448,7 +456,7 @@ const StatsCard = () => {
           }
         );
         setProfile(response.data.user);
-        console.log("Profile data:", response.data.user);
+        console.log("Profile data:", response.data);
       } catch (err) {
         console.log("Profile fetch error:", err);
       }
@@ -459,7 +467,7 @@ const StatsCard = () => {
 
   // Handle redirection if no userId
   if (!auth?.userId) {
-    return <Redirect href="/auth" />;
+    router.replace("/auth");    
   }
 
   return (
@@ -506,7 +514,7 @@ const RecentGameCard = () => {
     { id: '3', type: 'bullet', opponent: 'Maria', rating: 1375, result: 'draw' },
   ];
 
-  const getGameTypeImage = (type) => {
+  const getGameTypeImage = (type : any) => {
     switch (type) {
       case 'bullet': return bullet;
       case 'rapid': return rapid;
@@ -514,7 +522,7 @@ const RecentGameCard = () => {
     }
   };
 
-  const getResultStyle = (result) => {
+  const getResultStyle = (result : any) => {
     switch (result) {
       case 'win': return { backgroundColor: '#4CAF50' };
       case 'loss': return { backgroundColor: '#FF5252' };
@@ -523,7 +531,7 @@ const RecentGameCard = () => {
     }
   };
 
-  const getResultSymbol = (result) => {
+  const getResultSymbol = (result : any) => {
     switch (result) {
       case 'win': return '+';
       case 'loss': return '−';
@@ -593,14 +601,23 @@ const RecentGameCard = () => {
 
 export default function Home() {
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedTime, setSelectedTime] = useState(10 * 60);
   const [isSearching, setIsSearching] = useState(false);
   const auth = useContext(AuthContext);
+  const {socket, isSocketConnected} = useContext(AuthContext)
+  const router = useRouter()
 
-  const handlePlay = () => {
-    // Placeholder for game search logic
-    setIsSearching(true);
-    // Here you would implement the actual game search/matchmaking logic
-  };
+  const handlePlay = async () => {
+    if (!socket || !socket.connected) {
+      console.error("Socket not connected!");
+      return;
+    }
+
+  router.push({
+    pathname: "/newGame",
+    params: { timeControl: selectedTime.toString() }
+  });
+  }
 
   return (
     <SafeAreaView style={styles.container}>

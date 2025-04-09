@@ -1,3 +1,5 @@
+//@ts-nocheck
+
 import React, { useState, useEffect, useContext } from "react";
 import {
   View,
@@ -15,7 +17,9 @@ import axios from "axios";
 
 import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/Ionicons';
-const API_URL = "http://172.16.0.127:8080";
+import { UserProfile } from "@/types/types";
+import { useRouter } from 'expo-router';
+const API_URL = "http://172.16.0.120:8080";
 
 
 
@@ -67,7 +71,7 @@ const gameTypes = [
 ];
 
 // Component for the profile header section
-const ProfileHeader = ({ profile }) => (
+const ProfileHeader = ({ profile } : any) => (
   <View style={styles.profileHeader}>
     <View style={styles.profileInfo}>
       {/* Replace icon with image from placeholder service */}
@@ -106,7 +110,7 @@ const GameTypeCards = () => (
 
 
 // Component for a single game item
-const GameItem = ({ item }) => (
+const GameItem = ({ item } : any) => (
   <View>
     <View style={styles.gameItem}>
       <View style={styles.gameInfo}>
@@ -148,7 +152,7 @@ const RecentGames = () => (
 );
 
 // Component for section headers
-const SectionHeader = ({ title, children }) => (
+const SectionHeader = ({ title, children } : any) => (
   <View style={styles.sectionHeader}>
     <Text style={styles.sectionTitle}>{title}</Text>
     {children || (
@@ -163,7 +167,7 @@ const SectionHeader = ({ title, children }) => (
 const RatingActivity = () => {
   const [selectedDot, setSelectedDot] = useState(null);
 
-  const handleDataPointClick = (data) => {
+  const handleDataPointClick = (data : any) => {
     // data.index is the index of the data point pressed
     setSelectedDot(data.index);
   };
@@ -201,7 +205,7 @@ const RatingActivity = () => {
         withHorizontalLabels={false} 
         style={{ marginLeft:-50}}
         onDataPointClick={handleDataPointClick}
-        renderDotContent={({ x, y, index, indexData }) => {
+        renderDotContent={({ x, y, index, indexData } : any) => {
           // Only render text if this dot is selected
           if (index === selectedDot) {
             return (
@@ -231,8 +235,18 @@ const RatingActivity = () => {
 // Main Profile component
 const Profile = () => {
   const auth = useContext(AuthContext);
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [selectedMode, setSelectedMode] = useState("Rapid");
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      await auth.logout();
+    
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -261,6 +275,10 @@ const Profile = () => {
         <View style={styles.contentContainer}>
         <RatingActivity selectedMode={selectedMode} setSelectedMode={setSelectedMode} />
         <RecentGames />
+
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+     <Text style={styles.logoutButtonText}>Logout</Text>
+   </TouchableOpacity>
           
         </View>
       </ScrollView>
@@ -458,6 +476,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     paddingVertical: 10,
     height: 240,
+  },
+  logoutButton: {
+    backgroundColor: "#FF6347",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  logoutButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });
 

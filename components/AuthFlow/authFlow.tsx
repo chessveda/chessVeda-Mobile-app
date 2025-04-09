@@ -3,13 +3,12 @@ import { View, Text, TextInput, TouchableOpacity, Image, Alert, ScrollView, Acti
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { AuthContext } from "@/components/context/authContext";
 import axios from "axios";
-// import authpic from "@/assets/images/auth-picture.png";
 import logo from "@/assets/images/logo-icon.png";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 
-const API_URL = "http://172.16.0.127:8080"
+const API_URL = "http://172.16.0.102:8080"
 
 export default function AuthFlow() {
     const auth = useContext(AuthContext);
@@ -30,14 +29,14 @@ export default function AuthFlow() {
         countryCode: "IN", // Default country code
     });
 
-    const handleDateChange = (event, selectedDate) => {
+    const handleDateChange = (event : any, selectedDate : any) => {
         setShowDatePicker(Platform.OS === 'ios');
         if (selectedDate) {
             setFormData({ ...formData, dob: selectedDate });
         }
     };
 
-    const handleCountrySelect = (country) => {
+    const handleCountrySelect = (country : any) => {
         setFormData({ 
             ...formData, 
             country: country.name, 
@@ -58,7 +57,7 @@ export default function AuthFlow() {
                     auth.login(res.data.userId, res.data.token);
                     router.push("/(tabs)/home");
                 }
-            } catch (error) {
+            } catch (error : any) {
                 Alert.alert("Error", error.response?.data?.message || "Login failed");
             }
         } else {
@@ -74,7 +73,7 @@ export default function AuthFlow() {
                         auth.login(res.data.userId, res.data.token);
                         router.push('/');
                     }
-                } catch (error) {
+                } catch (error : any) {
                     Alert.alert("Error", error.response?.data?.message || "Registration failed");
                 }
             }
@@ -121,188 +120,188 @@ export default function AuthFlow() {
                         {mode === "login" ? "Login into your account" : step === 1 ? "Create Your Account" : step === 2 ? "When is Your Birthday?" : "What's Your Country?"}
                     </Text>
 
-                    {mode === "login" ? (
-                        <>
-                            <View style={styles.inputContainer}>
-                                <TextInput
-                                    placeholder="Email"
-                                    placeholderTextColor="#999"
-                                    style={styles.input}
-                                    value={formData.email}
-                                    onChangeText={(text) => setFormData({ ...formData, email: text })}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                />
-                            </View>
-                            <View style={styles.inputContainer}>
-                                <TextInput
-                                    placeholder="Password"
-                                    placeholderTextColor="#999"
-                                    style={styles.input}
-                                    value={formData.password}
-                                    onChangeText={(text) => setFormData({ ...formData, password: text })}
-                                    secureTextEntry={secureTextEntry}
-                                />
-                                <TouchableOpacity 
-                                    onPress={() => setSecureTextEntry(!secureTextEntry)} 
-                                    style={styles.eyeIcon}
-                                >
-                                    <Ionicons 
-                                        name={secureTextEntry ? "eye-off-outline" : "eye-outline"} 
-                                        size={20} 
-                                        color="#666" 
-                                    />
-                                </TouchableOpacity>
-                            </View>
-                        </>
-                    ) : step === 1 ? (
-                        <>
-                            <View style={styles.inputContainer}>
-                                <TextInput
-                                    placeholder="Full Name"
-                                    placeholderTextColor="#999"
-                                    style={styles.input}
-                                    value={formData.name}
-                                    onChangeText={(text) => setFormData({ ...formData, name: text })}
-                                    autoCapitalize="words"
-                                />
-                            </View>
-                            <View style={styles.inputContainer}>
-                                <TextInput
-                                    placeholder="Email"
-                                    placeholderTextColor="#999"
-                                    style={styles.input}
-                                    value={formData.email}
-                                    onChangeText={(text) => setFormData({ ...formData, email: text })}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                />
-                            </View>
-                            <View style={styles.inputContainer}>
-                                <TextInput
-                                    placeholder="Password"
-                                    placeholderTextColor="#999"
-                                    style={styles.input}
-                                    value={formData.password}
-                                    onChangeText={(text) => setFormData({ ...formData, password: text })}
-                                    secureTextEntry={secureTextEntry}
-                                />
-                                <TouchableOpacity 
-                                    onPress={() => setSecureTextEntry(!secureTextEntry)} 
-                                    style={styles.eyeIcon}
-                                >
-                                    <Ionicons 
-                                        name={secureTextEntry ? "eye-off-outline" : "eye-outline"} 
-                                        size={20} 
-                                        color="#666" 
-                                    />
-                                </TouchableOpacity>
-                            </View>
-                            <Text style={styles.label}>Gender</Text>
-                            <View style={styles.radioContainer}>
-                                <TouchableOpacity
-                                    style={styles.radioOption}
-                                    onPress={() => setFormData({ ...formData, gender: "Male" })}
-                                >
-                                    <Ionicons
-                                        name={formData.gender === "Male" ? "radio-button-on" : "radio-button-off"}
-                                        size={20}
-                                        color={formData.gender === "Male" ? "#3D4CED" : "#666"}
-                                        style={styles.radioIcon}
-                                    />
-                                    <Text
-                                        style={[
-                                            styles.radioText,
-                                            { color: formData.gender === "Male" ? "#fff" : "#666" }
-                                        ]}
-                                    >
-                                        Male
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.radioOption}
-                                    onPress={() => setFormData({ ...formData, gender: "Female" })}
-                                >
-                                    <Ionicons
-                                        name={formData.gender === "Female" ? "radio-button-on" : "radio-button-off"}
-                                        size={20}
-                                        color={formData.gender === "Female" ? "#3D4CED" : "#666"}
-                                        style={styles.radioIcon}
-                                    />
-                                    <Text
-                                        style={[
-                                            styles.radioText,
-                                            { color: formData.gender === "Female" ? "#fff" : "#666" }
-                                        ]}
-                                    >
-                                        Female
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </>
-                    ) : step === 2 ? (
-                        <>
-                            <Text style={styles.label}>*Please Select the Year First</Text>
+                {mode === "login" ? (
+                    <>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                placeholder="Email"
+                                placeholderTextColor="#999"
+                                style={styles.input}
+                                value={formData.email}
+                                onChangeText={(text) => setFormData({ ...formData, email: text })}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                            />
+                        </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                placeholder="Password"
+                                placeholderTextColor="#999"
+                                style={styles.input}
+                                value={formData.password}
+                                onChangeText={(text) => setFormData({ ...formData, password: text })}
+                                secureTextEntry={secureTextEntry}
+                            />
                             <TouchableOpacity 
-                                onPress={() => setShowDatePicker(true)} 
-                                style={[styles.inputContainer, styles.datePickerButton]}
+                                onPress={() => setSecureTextEntry(!secureTextEntry)} 
+                                style={styles.eyeIcon}
                             >
-                                <Text style={styles.dateText}>
-                                    {formData.dob.toLocaleDateString('en-US', {
-                                        month: 'long',
-                                        day: 'numeric',
-                                        year: 'numeric'
-                                    })}
-                                </Text>
-                            </TouchableOpacity>
-                            {showDatePicker && (
-                                <DateTimePicker
-                                    value={formData.dob}
-                                    mode="date"
-                                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                                    maximumDate={new Date()}
-                                    onChange={handleDateChange}
-                                    style={Platform.OS === 'ios' ? styles.iosDatePicker : styles.androidDatePicker}
-                                    textColor={Platform.OS === 'ios' ? '#fff' : undefined}
-                                />
-                            )}
-                        </>
-                    ) : (
-                        <View style={styles.countryContainer}>
-                            <TouchableOpacity 
-                                style={[styles.inputContainer, styles.countryPickerButton]}
-                                onPress={() => setShowCountryPicker(true)}
-                            >
-                                <Text style={styles.flagIcon}>
-                                    {formData.countryCode ? String.fromCodePoint(...formData.countryCode.split('').map(char => 127397 + char.charCodeAt())) : "🌍"}
-                                </Text>
-                                <Text style={styles.countryText}>
-                                    {formData.country || "Select a country"}
-                                </Text>
                                 <Ionicons 
-                                    name="chevron-down" 
+                                    name={secureTextEntry ? "eye-off-outline" : "eye-outline"} 
                                     size={20} 
                                     color="#666" 
-                                    style={styles.dropdownIcon} 
                                 />
                             </TouchableOpacity>
-                            {/* <CountryPicker
-                                visible={showCountryPicker}
-                                withFlag
-                                withFilter
-                                withCountryNameButton
-                                onSelect={handleCountrySelect}
-                                onClose={() => setShowCountryPicker(false)}
-                                containerButtonStyle={{ display: 'none' }} // Hide default button since we use custom one
-                                theme={{
-                                    backgroundColor: '#222',
-                                    onBackgroundTextColor: '#fff',
-                                    primaryColor: '#3D4CED',
-                                    filterPlaceholderTextColor: '#999',
-                                }}
-                            /> */}
                         </View>
-                    )}
+                    </>
+                ) : step === 1 ? (
+                    <>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                placeholder="Full Name"
+                                placeholderTextColor="#999"
+                                style={styles.input}
+                                value={formData.name}
+                                onChangeText={(text) => setFormData({ ...formData, name: text })}
+                                autoCapitalize="words"
+                            />
+                        </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                placeholder="Email"
+                                placeholderTextColor="#999"
+                                style={styles.input}
+                                value={formData.email}
+                                onChangeText={(text) => setFormData({ ...formData, email: text })}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                            />
+                        </View>
+                        <View style={styles.inputContainer}>
+                            <TextInput
+                                placeholder="Password"
+                                placeholderTextColor="#999"
+                                style={styles.input}
+                                value={formData.password}
+                                onChangeText={(text) => setFormData({ ...formData, password: text })}
+                                secureTextEntry={secureTextEntry}
+                            />
+                            <TouchableOpacity 
+                                onPress={() => setSecureTextEntry(!secureTextEntry)} 
+                                style={styles.eyeIcon}
+                            >
+                                <Ionicons 
+                                    name={secureTextEntry ? "eye-off-outline" : "eye-outline"} 
+                                    size={20} 
+                                    color="#666" 
+                                />
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={styles.label}>Gender</Text>
+                        <View style={styles.radioContainer}>
+                            <TouchableOpacity
+                                style={styles.radioOption}
+                                onPress={() => setFormData({ ...formData, gender: "Male" })}
+                            >
+                                <Ionicons
+                                    name={formData.gender === "Male" ? "radio-button-on" : "radio-button-off"}
+                                    size={20}
+                                    color={formData.gender === "Male" ? "#3D4CED" : "#666"}
+                                    style={styles.radioIcon}
+                                />
+                                <Text
+                                    style={[
+                                        styles.radioText,
+                                        { color: formData.gender === "Male" ? "#fff" : "#666" }
+                                    ]}
+                                >
+                                    Male
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.radioOption}
+                                onPress={() => setFormData({ ...formData, gender: "Female" })}
+                            >
+                                <Ionicons
+                                    name={formData.gender === "Female" ? "radio-button-on" : "radio-button-off"}
+                                    size={20}
+                                    color={formData.gender === "Female" ? "#3D4CED" : "#666"}
+                                    style={styles.radioIcon}
+                                />
+                                <Text
+                                    style={[
+                                        styles.radioText,
+                                        { color: formData.gender === "Female" ? "#fff" : "#666" }
+                                    ]}
+                                >
+                                    Female
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </>
+                ) : step === 2 ? (
+                    <>
+                        <Text style={styles.label}>*Please Select the Year First</Text>
+                        <TouchableOpacity 
+                            onPress={() => setShowDatePicker(true)} 
+                            style={[styles.inputContainer, styles.datePickerButton]}
+                        >
+                            <Text style={styles.dateText}>
+                                {formData.dob.toLocaleDateString('en-US', {
+                                    month: 'long',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                })}
+                            </Text>
+                        </TouchableOpacity>
+                        {showDatePicker && (
+                            <DateTimePicker
+                                value={formData.dob}
+                                mode="date"
+                                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                maximumDate={new Date()}
+                                onChange={handleDateChange}
+                                style={Platform.OS === 'ios' ? styles.iosDatePicker : styles.androidDatePicker}
+                                textColor={Platform.OS === 'ios' ? '#fff' : undefined}
+                            />
+                        )}
+                    </>
+                ) : (
+                    <View style={styles.countryContainer}>
+                        <TouchableOpacity 
+                            style={[styles.inputContainer, styles.countryPickerButton]}
+                            onPress={() => setShowCountryPicker(true)}
+                        >
+                            <Text style={styles.flagIcon}>
+                                {formData.countryCode ? String.fromCodePoint(...formData.countryCode.split('').map(char => 127397 + char.charCodeAt())) : "🌍"}
+                            </Text>
+                            <Text style={styles.countryText}>
+                                {formData.country || "Select a country"}
+                            </Text>
+                            <Ionicons 
+                                name="chevron-down" 
+                                size={20} 
+                                color="#666" 
+                                style={styles.dropdownIcon} 
+                            />
+                        </TouchableOpacity>
+                        {/* <CountryPicker
+                            visible={showCountryPicker}
+                            withFlag
+                            withFilter
+                            withCountryNameButton
+                            onSelect={handleCountrySelect}
+                            onClose={() => setShowCountryPicker(false)}
+                            containerButtonStyle={{ display: 'none' }} // Hide default button since we use custom one
+                            theme={{
+                                backgroundColor: '#222',
+                                onBackgroundTextColor: '#fff',
+                                primaryColor: '#3D4CED',
+                                filterPlaceholderTextColor: '#999',
+                            }}
+                        /> */}
+                    </View>
+                )}
 
                     <TouchableOpacity 
                         onPress={handleSubmit} 

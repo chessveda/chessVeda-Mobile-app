@@ -1,9 +1,8 @@
-import { Redirect } from 'expo-router'; 
-import React, { useState, useEffect, useContext } from 'react'; 
-import { View, ActivityIndicator } from 'react-native'; 
-import AsyncStorage from '@react-native-async-storage/async-storage'; 
-import { AuthContext } from '@/components/context/authContext'; 
-import SplashScreen from '@/components/SplashScreen/SplashScreen';
+import { Redirect } from 'expo-router';
+import React, { useState, useEffect, useContext } from 'react';
+import { View, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AuthContext } from '@/components/context/authContext';
 
 export default function Index() {
   const { userId, token } = useContext(AuthContext);
@@ -31,6 +30,7 @@ export default function Index() {
         console.warn("Error checking authentication:", error);
       } finally {
         setIsChecking(false);
+        setShowSplash(false);
       }
     };
     
@@ -41,8 +41,19 @@ export default function Index() {
     // as the SplashScreen component will handle its own navigation
   }, []);
 
-  if (isChecking || showSplash) {
-    return <SplashScreen />;
+  if (isChecking) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#121212",
+        }}
+      >
+        <ActivityIndicator size="large" color="#4CAF50" />
+      </View>
+    );
   }
 
   return <Redirect href={isAuthenticated ? "/home" : "/auth"} />;
