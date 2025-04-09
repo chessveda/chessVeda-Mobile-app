@@ -15,7 +15,7 @@ import GameScreen from '../newGame';
 import { useAuth } from '@/hooks/authHook';
 import { useRouter } from 'expo-router';
 
-const API_URL = "http://172.16.0.120:8080"
+const API_URL = "http://172.16.0.127:8080"
 
 
 const styles = StyleSheet.create({

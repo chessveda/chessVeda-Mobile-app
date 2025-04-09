@@ -19,6 +19,9 @@ import { useLocalSearchParams } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { Square } from 'chess.js';
+import CustomChessBoard from '@/components/chessBoard/chessBoard';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import logo from "@/assets/images/logo-icon.png";
 
 type PlayerColor = 'white' | 'black';
 type GamePhase = 'matchmaking' | 'playing' | 'gameover';
@@ -58,13 +61,14 @@ const { width } = Dimensions.get('window');
 const GameScreen: React.FC = () => {
   const [game, setGame] = useState<Chess | null>(null);
   const [gameId, setGameId] = useState<string | null>(null);
-  const [playerColor, setPlayerColor] = useState<PlayerColor | null>(null);
+  const [playerColor, setPlayerColor] = useState<PlayerColor>('white');
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [opponentInfo, setOpponentInfo] = useState<PlayerDetails>({
     name: 'Waiting...',
     rating: 1500,
   });
   const [whiteTime, setWhiteTime] = useState<number>(0);
+  const chessboardRef = useRef(null);
   const [blackTime, setBlackTime] = useState<number>(0);
   const [gamePhase, setGamePhase] = useState<GamePhase>('matchmaking');
   const [matchmakingStatus, setMatchmakingStatus] = useState<MatchmakingStatus>('idle');
@@ -243,52 +247,33 @@ const GameScreen: React.FC = () => {
     setGamePhase('gameover');
   }, [playerColor, userId]);
 
-  const makeMove = useCallback((moveData: any) => {
+  const handleChessBoardMove = useCallback((moveObj: { from: string, to: string, promotion?: string }) => {
     if (!gameId || !socket || !playerColor || !game || gamePhase !== 'playing') {
       console.log('Invalid move conditions');
       return false;
     }
-  
+    
     try {
-      const move = moveData.move || moveData;
-      const from = move.from || move.sourceSquare;
-      const to = move.to || move.targetSquare;
-      
-      if (!from || !to) {
-        console.log('Missing from/to in move data');
-        return false;
-      }
-  
-      // Get the piece being moved
-      const piece = game.get(from);
+      // Validate move
+      const piece = game.get(moveObj.from);
       if (!piece) {
         console.log('No piece at source square');
         return false;
       }
-  
+      
       // Validate piece color matches player color
       const pieceColor = piece.color === 'w' ? 'white' : 'black';
       if (pieceColor !== playerColor) {
         console.log(`Invalid move: Player (${playerColor}) cannot move ${pieceColor} pieces`);
         return false;
       }
-  
+      
       // Validate it's the correct turn
       const currentTurn = game.turn() === 'w' ? 'white' : 'black';
       if (currentTurn !== playerColor) {
         console.log(`Invalid move: Not player's turn (current turn: ${currentTurn})`);
         return false;
       }
-  
-      // Check for pawn promotion
-      const isPromotion = 
-        piece.type === 'p' && 
-        ((to[1] === '8' && piece.color === 'w') || 
-         (to[1] === '1' && piece.color === 'b'));
-      
-      const promotion = isPromotion ? (move.promotion || 'q') : undefined;
-      
-      const moveObj = { from, to, promotion };
       
       // Try the move locally first
       const result = game.move(moveObj);
@@ -297,28 +282,28 @@ const GameScreen: React.FC = () => {
         return false;
       }
       
-      // Update board state immediately
+      // Update board state
       setBoardFen(game.fen());
       
-      // Emit move to server with all required fields
+      // Emit move to server
       socket.emit('make_move', {
         gameId,
-        from,
-        to,
+        from: moveObj.from,
+        to: moveObj.to,
         promotion: moveObj.promotion
       });
       
-      // Update local state optimistically
+      // Update local state
       setGame(new Chess(game.fen()));
       
-      // Optimistically add move to history
+      // Add move to history
       if (result.san) {
         setMoveHistory(prev => [...prev, result.san]);
       }
       
       return true;
     } catch (error) {
-      console.error('Error in makeMove:', error);
+      console.error('Error handling move:', error);
       return false;
     }
   }, [game, gameId, socket, playerColor, gamePhase]);
@@ -509,12 +494,13 @@ const GameScreen: React.FC = () => {
     }
 
     return (
-      <View style={{ flexDirection: 'column' }}>
+      <View style={{ flexDirection: 'row' }}>
         {pairedMoves.map((pair, index) => (
-          <View key={index} style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 4 }}>
-            <Text style={{ flex: 1 }}>{pair.number}.</Text>
-            <Text style={{ flex: 2 }}>{pair.white || ''}</Text>
-            <Text style={{ flex: 2 }}>{pair.black || ''}</Text>
+          <View key={index} style={{ backgroundColor:"#000",flexDirection: 'row', justifyContent: 'space-between', padding: 4 }}>
+            <Text style={{color:"#fff"}}>{pair.number }.</Text>
+            <Text> </Text>
+            <Text style={{color:"#fff"}}>{pair.white || ''}</Text>
+            <Text style={{color:"#fff"}}>{pair.black || ''}</Text>
           </View>
         ))}
       </View>
@@ -523,7 +509,11 @@ const GameScreen: React.FC = () => {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+    <Image source={logo} style={styles.logo} />
+      <Text style={styles.htext}>ChessVeda</Text>
+      </View>
   
       {gamePhase === 'matchmaking' ? (
         <View style={styles.searchingContainer}>
@@ -582,17 +572,26 @@ const GameScreen: React.FC = () => {
 
           {console.log('Attempting to render Chessboard:', { fen: game?.fen() })}
           {gamePhase === 'playing' && game && (
-         <Chessboard
-         {...{
-           key: boardFen,
-           fen: boardFen,
-           onMove: makeMove,
-           boardOrientation: playerColor || 'white',
-           customPieces,
-           animationDuration: 200
-         } as any}
-       />
-        )}
+              <CustomChessBoard
+                fen={boardFen}
+                onMove={handleChessBoardMove}
+                orientation={playerColor}
+                customPieces={{
+                  wK: require('@/assets/images/king-white.svg'),
+                  wQ: require('@/assets/images/queen-white.svg'),
+                  wB: require('@/assets/images/bishop-white.svg'),
+                  wN: require('@/assets/images/knight-white.svg'),
+                  wP: require('@/assets/images/white-pawn.svg'),
+                  wR: require('@/assets/images/rook-white.svg'),
+                  bK: require('@/assets/images/black-king.svg'),
+                  bQ: require('@/assets/images/black-queen.svg'),
+                  bB: require('@/assets/images/black-bishop.svg'),
+                  bN: require('@/assets/images/black-knight.svg'),
+                  bP: require('@/assets/images/black-pawn.svg'),
+                  bR: require('@/assets/images/black-rook.svg'),
+                }}
+              />
+            )}
 
           <View style={styles.playerInfoBottom}>
             <View style={styles.playerDetails}>
@@ -678,7 +677,7 @@ const GameScreen: React.FC = () => {
     </View>
   </View>
 </Modal>
-    </View>
+    </SafeAreaView>
     </GestureHandlerRootView>
   );
 };
@@ -686,7 +685,7 @@ const GameScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: '#000',
   },
   searchingContainer: {
     flex: 1,
@@ -897,6 +896,27 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     lineHeight: 36, // For better multiline text display
   },
+  header:{
+    flexDirection:"row",
+    justifyContent:"center",
+    alignItems:"center",
+    marginBottom:40
+    
+  },
+  logo: {
+    height: 32,
+    width: 19.58,
+    borderRadius: 25,
+   
+    
+    
+  },
+  htext:{
+    marginLeft:8,
+    fontSize:16,
+    fontWeight:600,
+    color:"#fff"
+  }
 });
 
 export default function GameScreenWrapper() {
@@ -906,3 +926,15 @@ export default function GameScreenWrapper() {
     </GestureHandlerRootView>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
