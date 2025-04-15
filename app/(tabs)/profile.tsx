@@ -19,7 +19,7 @@ import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { UserProfile } from "@/types/types";
 import { useRouter } from 'expo-router';
-const API_URL = "http://172.16.0.127:8080";
+const API_URL = "http://172.16.0.112:8080";
 
 
 

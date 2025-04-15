@@ -6,7 +6,7 @@ import human from '@/assets/images/human.png';
 import bot from '@/assets/images/bot.png';
 import bullet from '@/assets/images/bullet.png';
 import rapid from '@/assets/images/rapid.png';
-import logo from "@/assets/images/logo-icon.png";
+import logo from "@/assets/images/logo2.png";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '@/components/context/authContext';
 import { UserProfile, TimeControlType } from "@/types/types";
@@ -15,7 +15,7 @@ import GameScreen from '../newGame';
 import { useAuth } from '@/hooks/authHook';
 import { useRouter } from 'expo-router';
 
-const API_URL = "http://172.16.0.127:8080"
+const API_URL = "http://172.16.0.112:8080"
 
 
 const styles = StyleSheet.create({
@@ -328,10 +328,10 @@ const GameModeModal = ({ modalVisible, setModalVisible, handlePlay, isSearching,
 
   return (
     <Modal
-      animationType="slide"
-      transparent={true}
-      visible={modalVisible}
-      onRequestClose={() => setModalVisible(false)}
+    animationType="slide"
+    transparent={true}
+    visible={modalVisible}
+    onRequestClose={() => setModalVisible(false)}
     >
       <TouchableWithoutFeedback onPress={handleBackdropPress}>
         <View style={styles.modalOverlay}>
@@ -463,12 +463,13 @@ const StatsCard = () => {
     };
 
     fetchProfile();
+    if (!auth?.userId) {
+      router.replace("/auth");    
+    }
   }, [auth?.userId, auth?.token]);
 
   // Handle redirection if no userId
-  if (!auth?.userId) {
-    router.replace("/auth");    
-  }
+  
 
   return (
     <View style={styles.cardContainer}>
@@ -604,8 +605,8 @@ export default function Home() {
   const [selectedTime, setSelectedTime] = useState(10 * 60);
   const [isSearching, setIsSearching] = useState(false);
   const auth = useContext(AuthContext);
-  const {socket, isSocketConnected} = useContext(AuthContext)
-  const router = useRouter()
+  const { socket } = useContext(AuthContext);
+  const router = useRouter();
 
   const handlePlay = async () => {
     if (!socket || !socket.connected) {
@@ -613,38 +614,41 @@ export default function Home() {
       return;
     }
 
-  router.push({
-    pathname: "/newGame",
-    params: { timeControl: selectedTime.toString() }
-  });
-  }
+    // First close the modal
+    setModalVisible(false);
+
+    // Then proceed with navigation or any other steps you need
+    router.push({
+      pathname: "/newGame",
+      params: { timeControl: selectedTime.toString() }
+    });
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <StatsCard />
-        <RecentGameCard />
-        {/* Additional content can go here */}
-      </ScrollView>
-      
-      {/* Fixed Button at bottom */}
-      <View style={styles.fixedButtonContainer}>
-        <TouchableOpacity
-          style={styles.playButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <Text style={styles.playButtonText}>Start a New Game</Text>
-        </TouchableOpacity>
-      </View>
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <StatsCard />
+      <RecentGameCard />
+    </ScrollView>
 
-      {/* Game Mode Modal */}
-      <GameModeModal
-        modalVisible={modalVisible}
-        setModalVisible={setModalVisible}
-        handlePlay={handlePlay}
-        isSearching={isSearching}
-        setIsSearching={setIsSearching}
-      />
-    </SafeAreaView>
+    {/* Fixed Button at bottom */}
+    <View style={styles.fixedButtonContainer}>
+      <TouchableOpacity
+        style={styles.playButton}
+        onPress={() => setModalVisible(true)}
+      >
+        <Text style={styles.playButtonText}>Start a New Game</Text>
+      </TouchableOpacity>
+    </View>
+
+    {/* Game Mode Modal */}
+    <GameModeModal
+      modalVisible={modalVisible}
+      setModalVisible={setModalVisible}
+      handlePlay={handlePlay}
+      isSearching={isSearching}
+      setIsSearching={setIsSearching}
+    />
+  </SafeAreaView>
   );
 }

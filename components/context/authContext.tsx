@@ -49,7 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     console.log('Initializing new socket connection...');
-    const newSocket = io('http://172.16.0.127:8080', {
+    const newSocket = io('http://172.16.0.112:8080', {
       auth: { token },
       reconnection: true,
       reconnectionAttempts: 5, // Limit reconnection attempts
@@ -131,30 +131,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const restoreSession = async () => {
       try {
+        console.log('Restoring session...');
         const results = await AsyncStorage.multiGet([
           "userId",
           "token",
           "loginTimestamp",
         ]);
-
+    
         const [
           [, storedUserId],
           [, storedToken],
           [, storedTimestamp],
         ] = results as [[string, string | null], [string, string | null], [string, string | null]];
-
+    
+        console.log('Stored values:', { storedUserId, storedToken: storedToken ? 'exists' : null, storedTimestamp });
+    
         if (storedUserId && storedToken && storedTimestamp) {
           const loginTime = parseInt(storedTimestamp, 10);
           const currentTime = Date.now();
           const elapsedTime = currentTime - loginTime;
           const twentyFourHours = 24 * 60 * 60 * 1000;
-
+    
+          console.log('Time since login:', elapsedTime / 1000 / 60, 'minutes');
+          console.log('Valid for:', twentyFourHours / 1000 / 60, 'minutes');
+    
           if (elapsedTime < twentyFourHours) {
+            console.log('Session still valid, restoring user session');
             setUserId(storedUserId);
             setToken(storedToken);
           } else {
+            console.log('Session expired, logging out');
             await logout();
           }
+        } else {
+          console.log('No valid stored session found');
         }
       } catch (error) {
         console.error('Session restoration error:', error);

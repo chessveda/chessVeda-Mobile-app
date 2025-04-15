@@ -1,45 +1,50 @@
+// index.tsx 
 import { Redirect } from 'expo-router';
 import React, { useState, useEffect, useContext } from 'react';
-import { View, ActivityIndicator } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, ActivityIndicator, Text } from 'react-native';
 import { AuthContext } from '@/components/context/authContext';
+import SplashScreen from '@/components/SplashScreen/SplashScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Index() {
-  const { userId, token } = useContext(AuthContext);
+  const { isLoggedIn, userId } = useContext(AuthContext);
   const [isChecking, setIsChecking] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+  const [debugInfo, setDebugInfo] = useState('');
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkStorageDebug = async () => {
       try {
-        const storedUserId = await AsyncStorage.getItem("userId");
-        const storedToken = await AsyncStorage.getItem("token");
-        const storedTimestamp = await AsyncStorage.getItem("loginTimestamp");
+        const keys = await AsyncStorage.getAllKeys();
+        const items = await AsyncStorage.multiGet(keys);
+        const info = items
+          .filter(([key]) => ['userId', 'token', 'loginTimestamp'].includes(key))
+          .map(([key, value]) => `${key}: ${key === 'token' ? (value ? 'exists' : 'null') : value}`)
+          .join('\n');
         
-        if (storedUserId && storedToken && storedTimestamp) {
-          const loginTime = parseInt(storedTimestamp, 10);
-          const currentTime = Date.now();
-          const twentyFourHours = 24 * 60 * 60 * 1000;
-          
-          if (currentTime - loginTime < twentyFourHours) {
-            setIsAuthenticated(true);
-          }
-        }
-      } catch (error) {
-        console.warn("Error checking authentication:", error);
-      } finally {
+        setDebugInfo(info);
+        
+        // Give AuthContext time to restore the session (longer time for debug)
+        setTimeout(() => {
+          console.log('Auth check complete. isLoggedIn:', isLoggedIn, 'userId:', userId);
+          setIsChecking(false);
+          setShowSplash(false);
+        }, 5000);
+      } catch (e) {
+        console.error('Debug error:', e);
+        setDebugInfo('Error checking storage');
         setIsChecking(false);
         setShowSplash(false);
       }
     };
     
-    // We need to run the authentication check
-    checkAuth();
-    
-    // Don't need to set showSplash to false here, 
-    // as the SplashScreen component will handle its own navigation
-  }, []);
+    checkStorageDebug();
+    return () => {};
+  }, [isLoggedIn, userId]);
+
+  if (showSplash) {
+    return <SplashScreen />;
+  }
 
   if (isChecking) {
     return (
@@ -52,9 +57,13 @@ export default function Index() {
         }}
       >
         <ActivityIndicator size="large" color="#4CAF50" />
+        <Text style={{ color: 'white', marginTop: 20 }}>
+          {debugInfo}
+        </Text>
       </View>
     );
   }
 
-  return <Redirect href={isAuthenticated ? "/home" : "/auth"} />;
+  console.log('Redirecting to:', isLoggedIn ? '/home' : '/auth');
+  return <Redirect href={isLoggedIn ? "/home" : "/auth"} />;
 }

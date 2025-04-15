@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useRef, ReactNode } from 'react';
 import { 
   View, 
   Text, 
@@ -8,11 +8,10 @@ import {
   Modal, 
   Dimensions, 
   ActivityIndicator,
-  Alert
+  Alert,
+  ScrollView
 } from 'react-native';
 import { Chess } from 'chess.js';
-import Chessboard from 'react-native-chessboard';
-// import { ChessMove } from 'react-native-chessboard/lib/typescript/types';
 import { io } from 'socket.io-client';
 import { AuthContext } from '@/components/context/authContext';
 import { useLocalSearchParams } from 'expo-router';
@@ -21,14 +20,23 @@ import { useRouter } from 'expo-router';
 import { Square } from 'chess.js';
 import CustomChessBoard from '@/components/chessBoard/chessBoard';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import logo from "@/assets/images/logo-icon.png";
+import logo from "@/assets/images/logo2.png";
+import speaker from "@/assets/images/speaker.png";
+import Icon from 'react-native-vector-icons/FontAwesome';
+import backbtn from "@/assets/images/backbtn.png";
+import dspeaker from "@/assets/images/dspeaker.png";
+import cross from "@/assets/images/Cross.png";
+import menu from "@/assets/images/Menu.png"
+import analysis from "@/assets/images/analysis.png"
+import left from "@/assets/images/left.png"
+import right from "@/assets/images/right.png"
 
 type PlayerColor = 'white' | 'black';
 type GamePhase = 'matchmaking' | 'playing' | 'gameover';
 type MatchmakingStatus = 'idle' | 'searching' | 'found' | 'error';
 
-
 interface PlayerDetails {
+  country?: ReactNode;
   name: string;
   rating: number;
 }
@@ -68,7 +76,6 @@ const GameScreen: React.FC = () => {
     rating: 1500,
   });
   const [whiteTime, setWhiteTime] = useState<number>(0);
-  const chessboardRef = useRef(null);
   const [blackTime, setBlackTime] = useState<number>(0);
   const [gamePhase, setGamePhase] = useState<GamePhase>('matchmaking');
   const [matchmakingStatus, setMatchmakingStatus] = useState<MatchmakingStatus>('idle');
@@ -76,22 +83,33 @@ const GameScreen: React.FC = () => {
   const [searchTime, setSearchTime] = useState(0);
   const [searchTimer, setSearchTimer] = useState<NodeJS.Timeout | null>(null);
   const [gameResult, setGameResult] = useState<string | null>(null);
-  const [showResignConfirm, setShowResignConfirm] = useState(false);
+  
+  // Renamed from `showResignConfirm` to `showOptionsModal`
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  
   const [boardFen, setBoardFen] = useState<string>('start');
-  const resignTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const abortTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const findGameSent = useRef<boolean>(false);
   const params = useLocalSearchParams();
   const timeControl = params.timeControl ? Number(params.timeControl) : 600;
   const router = useRouter();
   const { userId, token, socket } = useContext(AuthContext);
-  
+  const [drawOffered, setDrawOffered] = useState<boolean>(false);
+const [opponentOfferedDraw, setOpponentOfferedDraw] = useState<boolean>(false);
+const [isMuted, setIsMuted] = useState(false);
+const [selectedOption, setSelectedOption] = useState('accept');
+const [showAbortConfirm, setShowAbortConfirm] = useState(false);
 
+
+
+  // ======= Utility: Time formatting =======
   const formatTime = useCallback((seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }, []);
 
+  // ======= Game Start =======
   const handleGameStart = useCallback((data: GameStartData) => {
     console.log('Game started with data:', data);
     try {
@@ -99,27 +117,27 @@ const GameScreen: React.FC = () => {
       setGame(newGame);
       setGameId(data.gameId);
       setBoardFen(newGame.fen());
-      
-      // Set player color based on backend assignment
+
+      // Set player color
       const isWhite = data.isWhite;
       setPlayerColor(isWhite ? 'white' : 'black');
-      
-      // Initialize times from backend
+
+      // Initialize times
       setWhiteTime(data.whiteTime);
       setBlackTime(data.blackTime);
-      
-      // Ensure proper move history
+
+      // Initialize move history
       if (data.moves && Array.isArray(data.moves)) {
         setMoveHistory(data.moves);
       } else {
         setMoveHistory([]);
       }
-      
+
       setGamePhase('playing');
       setIsSearching(false);
       setMatchmakingStatus('found');
-  
-      // Set opponent info based on color assignment
+
+      // Set opponent info
       setOpponentInfo({
         name: isWhite 
           ? (data.blackPlayerDetails?.name || 'Opponent') 
@@ -128,37 +146,33 @@ const GameScreen: React.FC = () => {
           ? (data.blackPlayerDetails?.rating || 1500) 
           : (data.whitePlayerDetails?.rating || 1500)
       });
-  
-      console.log(`Game started as ${isWhite ? 'white' : 'black'}`);
     } catch (error) {
       console.error('Error initializing game:', error);
     }
   }, []);
 
+  // ======= Move Made (from server) =======
   const handleMoveMade = useCallback((data: MoveHandlerData) => {
     console.log('Move received from server:', data);
     try {
-      // Always sync with server's game state to ensure consistency
       const newGame = new Chess(data.fen);
       setGame(newGame);
-      setBoardFen(data.fen); // Use the exact FEN from server
-      
-      // Update move history from server's data
+      setBoardFen(data.fen);
+
       setMoveHistory(prevMoves => {
         const lastMove = prevMoves[prevMoves.length - 1];
-        // If this is a new move, add it to the history
         if (data.san && lastMove !== data.san) {
           return [...prevMoves, data.san];
         }
         return prevMoves;
       });
-      
-      // Always sync with server times
+
+      // Sync time
       setWhiteTime(data.whiteTime);
       setBlackTime(data.blackTime);
+
     } catch (error) {
       console.error('Error handling server move:', error);
-      // Fallback to server's position in case of error
       if (data.fen) {
         setGame(new Chess(data.fen));
         setBoardFen(data.fen);
@@ -166,32 +180,28 @@ const GameScreen: React.FC = () => {
     }
   }, []);
 
-  // Single time control effect that handles both players' clocks
+  // ======= Timers for each move =======
   useEffect(() => {
     if (gamePhase !== 'playing' || !game) return;
-    
+
     const interval = setInterval(() => {
-      // Only decrement time for the player whose turn it is
       if (game.turn() === 'w') {
         setWhiteTime(prev => Math.max(0, prev - 1));
-        
-        // Check for white timeout
         if (whiteTime <= 1 && socket && gameId && playerColor === 'black') {
           socket.emit('timeout', { gameId, color: 'white' });
         }
       } else {
         setBlackTime(prev => Math.max(0, prev - 1));
-        
-        // Check for black timeout
         if (blackTime <= 1 && socket && gameId && playerColor === 'white') {
           socket.emit('timeout', { gameId, color: 'black' });
         }
       }
     }, 1000);
-    
+
     return () => clearInterval(interval);
   }, [gamePhase, game, whiteTime, blackTime, socket, gameId, playerColor]);
 
+  // ======= Game Ended =======
   const handleGameEnded = useCallback((result: { 
     winner: string | null; 
     reason: string;
@@ -201,9 +211,9 @@ const GameScreen: React.FC = () => {
     blackRatingChange?: number;
   }) => {
     const isWhite = playerColor === 'white';
-    const playerWon = (result.winner === userId) || 
-                     (result.winner === (isWhite ? 'white' : 'black'));
-    
+    const playerWon = (result.winner === userId) ||
+                      (result.winner === (isWhite ? 'white' : 'black'));
+
     let resultText = '';
     switch (result.reason) {
       case 'checkmate':
@@ -237,7 +247,7 @@ const GameScreen: React.FC = () => {
     if (result.whiteRatingChange && result.blackRatingChange) {
       const ratingChange = isWhite ? result.whiteRatingChange : result.blackRatingChange;
       const newRating = isWhite ? result.whiteRating : result.blackRating;
-      
+
       if (newRating) {
         resultText += `\nRating: ${newRating} (${ratingChange > 0 ? '+' : ''}${ratingChange})`;
       }
@@ -247,60 +257,52 @@ const GameScreen: React.FC = () => {
     setGamePhase('gameover');
   }, [playerColor, userId]);
 
+  // ======= Handle Local Move =======
   const handleChessBoardMove = useCallback((moveObj: { from: string, to: string, promotion?: string }) => {
     if (!gameId || !socket || !playerColor || !game || gamePhase !== 'playing') {
       console.log('Invalid move conditions');
       return false;
     }
-    
+
     try {
-      // Validate move
       const piece = game.get(moveObj.from);
       if (!piece) {
         console.log('No piece at source square');
         return false;
       }
-      
-      // Validate piece color matches player color
+
       const pieceColor = piece.color === 'w' ? 'white' : 'black';
       if (pieceColor !== playerColor) {
         console.log(`Invalid move: Player (${playerColor}) cannot move ${pieceColor} pieces`);
         return false;
       }
-      
-      // Validate it's the correct turn
+
       const currentTurn = game.turn() === 'w' ? 'white' : 'black';
       if (currentTurn !== playerColor) {
         console.log(`Invalid move: Not player's turn (current turn: ${currentTurn})`);
         return false;
       }
-      
-      // Try the move locally first
+
       const result = game.move(moveObj);
       if (!result) {
         console.log('Invalid chess move');
         return false;
       }
-      
-      // Update board state
+
       setBoardFen(game.fen());
-      
-      // Emit move to server
+
       socket.emit('make_move', {
         gameId,
         from: moveObj.from,
         to: moveObj.to,
         promotion: moveObj.promotion
       });
-      
-      // Update local state
+
       setGame(new Chess(game.fen()));
-      
-      // Add move to history
       if (result.san) {
         setMoveHistory(prev => [...prev, result.san]);
       }
-      
+
       return true;
     } catch (error) {
       console.error('Error handling move:', error);
@@ -308,111 +310,154 @@ const GameScreen: React.FC = () => {
     }
   }, [game, gameId, socket, playerColor, gamePhase]);
 
-  const handleResign = () => {
+  // ======= Handle Abort =======
+  const handleAbort = () => {
     if (!socket || !gameId || gamePhase !== "playing") {
-      console.log('Cannot resign - missing socket, gameId, or wrong game phase');
+      console.log('Cannot abort - missing socket, gameId, or wrong game phase');
       return;
     }
-  
-    setShowResignConfirm(false);
-    
-    // Clear any existing timeout
-    if (resignTimeoutRef.current) {
-      clearTimeout(resignTimeoutRef.current);
+
+    setShowOptionsModal(false);
+
+    if (abortTimeoutRef.current) {
+      clearTimeout(abortTimeoutRef.current);
     }
-  
-    // Start a longer timeout (10 seconds instead of 5)
-    resignTimeoutRef.current = setTimeout(() => {
-      if (gamePhase === 'playing') { // Only show error if still in playing state
-        setGameResult("Error: Resignation timed out. Please try again.");
+
+    // Start a longer timeout
+    abortTimeoutRef.current = setTimeout(() => {
+      if (gamePhase === 'playing') {
+        setGameResult("Error: Abort timed out. Please try again.");
       }
     }, 10000);
-  
-    // Emit resign event
+
+    // The server may treat “abort” the same way as “resign” or differently.
+    // For demonstration, we reuse the same event:
     socket.emit("resign_game", gameId, (acknowledgement: { success?: boolean, error?: string }) => {
-      // Clear timeout on response
-      if (resignTimeoutRef.current) {
-        clearTimeout(resignTimeoutRef.current);
-        resignTimeoutRef.current = null;
+      if (abortTimeoutRef.current) {
+        clearTimeout(abortTimeoutRef.current);
+        abortTimeoutRef.current = null;
       }
-  
+
       if (acknowledgement?.error) {
-        console.log('Resign error:', acknowledgement.error);
-        setGameResult(`Resignation failed: ${acknowledgement.error}`);
+        console.log('Abort error:', acknowledgement.error);
+        setGameResult(`Abort failed: ${acknowledgement.error}`);
         setGamePhase('gameover');
       }
     });
   };
+
+  const handleOfferDraw = () => {
+    if (!socket || !gameId) {
+      console.error('Cannot offer draw - socket or gameId missing:', { socket: !!socket, gameId });
+      return;
+    }
+    
+    console.log('Offering draw for game:', gameId);
+    
+    // Send just the gameId as a string - this is the fix!
+    socket.emit('offer_draw', gameId);
+    
+    setDrawOffered(true);
+    setShowOptionsModal(false);
+   Alert.alert("Draw Offered", "Your draw offer has been sent to your opponent.");
+  }
   
-  // Main initialization effect
+  // 3. Update the accept/decline draw handlers
+  const handleAcceptDraw = () => {
+    if (!socket || !gameId) {
+      console.error('Cannot accept draw - socket or gameId missing');
+      return;
+    }
+    
+    console.log('Accepting draw for game:', gameId);
+    socket.emit('accept_draw', gameId ); // Use consistent format for emitting events
+    setOpponentOfferedDraw(false);
+  };
+  
+  const handleDeclineDraw = () => {
+    if (!socket || !gameId) {
+      console.error('Cannot decline draw - socket or gameId missing');
+      return;
+    }
+    
+    console.log('Declining draw for game:', gameId);
+    socket.emit('decline_draw',  gameId ); // Use consistent format for emitting events
+    setOpponentOfferedDraw(false);
+  };
+
+  // ======= Socket & Matchmaking Setup =======
   useEffect(() => {
     if (!socket || !token) {
       console.log('Socket or token not available');
       return;
     }
-    
-    // Only find game once when component mounts
+
     if (gamePhase === 'matchmaking' && !findGameSent.current) {
       console.log('Starting game search with time control:', timeControl);
-      socket.emit('find_game', timeControl); // Pass timeControl directly
+      socket.emit('find_game', timeControl);
       findGameSent.current = true;
       setIsSearching(true);
       setMatchmakingStatus('searching');
-      
-      // Start search timer
+
       const timer = setInterval(() => setSearchTime(prev => prev + 1), 1000);
       setSearchTimer(timer);
     }
-    
-    // Setup event handlers
+
+    // Event handlers
     const handleGameWaiting = () => {
       console.log('Game waiting - searching for opponent');
       setIsSearching(true);
       setMatchmakingStatus('searching');
     };
-    
+
     const handleGameStartWrapper = (data: GameStartData) => {
       console.log('Game start event received:', data);
-      
-      // Clear search timer if it exists
+
       if (searchTimer) {
         clearInterval(searchTimer);
         setSearchTimer(null);
       }
-      
       handleGameStart(data);
     };
-    
+
     const handleMatchmakingError = (error: string) => {
       console.log('Matchmaking error:', error);
       setIsSearching(false);
       setMatchmakingStatus('error');
       if (searchTimer) clearInterval(searchTimer);
-      findGameSent.current = false; // Reset flag to allow retry
+      findGameSent.current = false;
     };
-    
-    // Register all event listeners
+    const handleDrawOffered = () => {
+      console.log('Opponent offered a draw for game:', gameId);
+      setOpponentOfferedDraw(true);
+    };
+  
+    const handleDrawDeclined = () => {
+      console.log('Draw was declined');
+      Alert.alert("Draw Declined", "Your opponent declined the draw offer.");
+      setDrawOffered(false);
+    };
+
     socket.on('game_waiting', handleGameWaiting);
     socket.on('game_start', handleGameStartWrapper);
     socket.on('move_made', handleMoveMade);
     socket.on('game_ended', handleGameEnded);
     socket.on('matchmaking_error', handleMatchmakingError);
-    
+    socket.on('draw_offered', handleDrawOffered);
+    socket.on('draw_declined', handleDrawDeclined);
+
     socket.on('connect', () => {
       console.log('Socket connected');
-      // If we're still in matchmaking phase on reconnect, try again
       if (gamePhase === 'matchmaking' && !findGameSent.current) {
         socket.emit('find_game', timeControl);
         findGameSent.current = true;
       }
     });
-    
+   
     socket.on('disconnect', () => console.log('Socket disconnected'));
     socket.on('connect_error', (err) => console.log('Socket error:', err));
-    
-    // Cleanup function
+
     return () => {
-      // Remove all event listeners
       socket.off('game_waiting', handleGameWaiting);
       socket.off('game_start', handleGameStartWrapper);
       socket.off('move_made', handleMoveMade);
@@ -421,67 +466,61 @@ const GameScreen: React.FC = () => {
       socket.off('connect');
       socket.off('disconnect');
       socket.off('connect_error');
-      
-      // Clear timers
+      socket.off('draw_offered', handleDrawOffered);
+      socket.off('draw_declined', handleDrawDeclined);
       if (searchTimer) clearInterval(searchTimer);
-      
-      // Cancel search if we're still searching
+
       if (isSearching) socket.emit('cancel_search');
-      
-      // Leave game if we're in one
       if (gameId && gamePhase !== 'gameover') socket.emit('leave_game', { gameId });
     };
-  }, [socket, token, gamePhase, timeControl, searchTimer, handleGameStart, handleMoveMade, handleGameEnded, gameId]);
+  }, [
+    socket, 
+    token, 
+    gamePhase, 
+    timeControl, 
+    searchTimer, 
+    handleGameStart, 
+    handleMoveMade, 
+    handleGameEnded, 
+    gameId
+  ]);
 
-  // Handle resign responses
+  // ======= Listen for Abort success/failure =======
   useEffect(() => {
     if (!socket || !gameId) return;
 
     const handleResignSuccess = (data: { winner: PlayerColor }) => {
-      if (resignTimeoutRef.current) {
-        clearTimeout(resignTimeoutRef.current);
-        resignTimeoutRef.current = null;
+      if (abortTimeoutRef.current) {
+        clearTimeout(abortTimeoutRef.current);
+        abortTimeoutRef.current = null;
       }
-    
       const resultText = data.winner === playerColor 
         ? "Opponent resigned. You won!" 
         : "You resigned. You lost.";
-    
       setGameResult(resultText);
       setGamePhase("gameover");
     };
-  
+
     const handleResignError = (error: { message: string }) => {
-      if (resignTimeoutRef.current) {
-        clearTimeout(resignTimeoutRef.current);
-        resignTimeoutRef.current = null;
+      if (abortTimeoutRef.current) {
+        clearTimeout(abortTimeoutRef.current);
+        abortTimeoutRef.current = null;
       }
-      setGameResult(`Resignation failed: ${error.message}`);
+      setGameResult(`Abort failed: ${error.message}`);
     };
-    
+
     socket.on('resign_failed', handleResignError);
     socket.on("resign_success", handleResignSuccess);
-  
+    socket.on('draw_offered', () => {
+      console.log('Received draw offer event! Game ID:', gameId);
+      setOpponentOfferedDraw(true);
+    });
+
     return () => {
       socket.off("resign_success", handleResignSuccess);
       socket.off('resign_failed', handleResignError);
     };
   }, [socket, gameId, playerColor]);
-
-  const customPieces = {
-    wK: require('@/assets/images/king-white.svg'),
-    wQ: require('@/assets/images/queen-white.svg'),
-    wB: require('@/assets/images/bishop-white.svg'),
-    wN: require('@/assets/images/knight-white.svg'),
-    wP: require('@/assets/images/white-pawn.svg'),
-    wR: require('@/assets/images/rook-white.svg'),
-    bK: require('@/assets/images/black-king.svg'),
-    bQ: require('@/assets/images/black-queen.svg'),
-    bB: require('@/assets/images/black-bishop.svg'),
-    bN: require('@/assets/images/black-knight.svg'),
-    bP: require('@/assets/images/black-pawn.svg'),
-    bR: require('@/assets/images/black-rook.svg'),
-  };
 
   const MoveHistory: React.FC<{ moves: string[] }> = ({ moves }) => {
     const pairedMoves = [];
@@ -492,195 +531,404 @@ const GameScreen: React.FC = () => {
         number: Math.ceil((i + 1) / 2),
       });
     }
-
+  
     return (
-      <View style={{ flexDirection: 'row' }}>
+      <ScrollView 
+        horizontal={true} 
+        showsHorizontalScrollIndicator={false}
+        style={{ backgroundColor: "#000", height:34 }}
+        contentContainerStyle={{ paddingVertical: 4 }}
+      >
         {pairedMoves.map((pair, index) => (
-          <View key={index} style={{ backgroundColor:"#000",flexDirection: 'row', justifyContent: 'space-between', padding: 4 }}>
-            <Text style={{color:"#fff"}}>{pair.number }.</Text>
-            <Text> </Text>
-            <Text style={{color:"#fff"}}>{pair.white || ''}</Text>
-            <Text style={{color:"#fff"}}>{pair.black || ''}</Text>
+          <View 
+            key={index} 
+            style={{ 
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingHorizontal: 0,
+            }}
+          >
+            <Text style={{ color: "#fff", marginRight: 1 }}>{pair.number}.</Text>
+            <Text style={{ color: "#fff", width: 60 }}>{pair.white || '...'}</Text>
+            <Text style={{ color: "#fff", width: 60 }}>{pair.black || ''}</Text>
           </View>
         ))}
-      </View>
+      </ScrollView>
     );
   };
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-    <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-    <Image source={logo} style={styles.logo} />
-      <Text style={styles.htext}>ChessVeda</Text>
-      </View>
+  {/* Back button on the left */}
+  {gamePhase === 'playing' && (
+    <TouchableOpacity 
+    style={styles.backButton} 
+    onPress={() => setShowAbortConfirm(true)}
+  >
+    <Image source={backbtn} style={styles.backButton} />
+  </TouchableOpacity>
   
-      {gamePhase === 'matchmaking' ? (
-        <View style={styles.searchingContainer}>
-          {matchmakingStatus === 'searching' ? (
-            <>
-              <Text style={styles.searchingText}>
-                Searching for opponent... {formatTime(searchTime)}
-                {'\n'}(Time Control: {timeControl / 60}+0)
-              </Text>
-              <ActivityIndicator size="large" color="#4CAF50" />
-              <TouchableOpacity 
-                style={styles.cancelButton}
-                onPress={() => {
-                  socket?.emit('cancel_search');
-                  setIsSearching(false);
-                  router.back();
-                }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel Search</Text>
-              </TouchableOpacity>
-            </>
-          ) : matchmakingStatus === 'error' ? (
-            <>
-              <Text style={styles.errorText}>Error finding opponent</Text>
-              <TouchableOpacity 
-                style={styles.retryButton}
-                onPress={() => {
-                  setSearchTime(0);
-                  socket?.emit('find_game', timeControl);
-                }}
-              >
-                <Text style={styles.retryButtonText}>Try Again</Text>
-              </TouchableOpacity>
-            </>
-          ) : null}
-        </View>
-      ) : gamePhase === 'playing' ? (
-        <>
-          <View style={styles.playerInfoTop}>
-            <View style={styles.playerDetails}>
-              <Image 
-                source={{ uri: 'https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg' }} 
-                style={styles.playerAvatar} 
-              />
-              <View>
-                <Text style={styles.playerName}>{opponentInfo.name}</Text>
-                <Text style={styles.playerRating}>{opponentInfo.rating}</Text>
+  )}
+  
+  {/* Logo and title in the center */}
+  <View style={styles.centerContainer} accessibilityRole="header">
+    <Image 
+      source={logo} 
+      style={styles.logo} 
+      accessibilityLabel="ChessVeda logo"
+    />
+    <Text style={styles.htext}>ChessVeda</Text>
+  </View>
+  
+  {/* Mute button on the right */}
+  <TouchableOpacity 
+    style={styles.muteButton}
+    onPress={() => setIsMuted(!isMuted)}
+    accessibilityLabel={isMuted ? "Unmute sound" : "Mute sound"}
+    accessibilityHint="Toggles game sound on and off"
+  >
+   <Image 
+  source={isMuted ? dspeaker : speaker} 
+  style={[styles.muteButton, isMuted && styles.dspeaker]} 
+/>
+  </TouchableOpacity>
+</View>
+        {/* ====== MATCHMAKING PHASE ====== */}
+        {gamePhase === 'matchmaking' ? (
+          <View style={styles.searchingContainer}>
+            {matchmakingStatus === 'searching' ? (
+              <>
+                <Text style={styles.searchingText}>
+                  Searching for opponent... {formatTime(searchTime)}
+                  {'\n'}(Time Control: {timeControl / 60}+0)
+                </Text>
+                <ActivityIndicator size="large" color="#4CAF50" />
+                <TouchableOpacity 
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    socket?.emit('cancel_search');
+                    setIsSearching(false);
+                    router.back();
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel Search</Text>
+                </TouchableOpacity>
+              </>
+            ) : matchmakingStatus === 'error' ? (
+              <>
+                <Text style={styles.errorText}>Error finding opponent</Text>
+                <TouchableOpacity 
+                  style={styles.retryButton}
+                  onPress={() => {
+                    setSearchTime(0);
+                    socket?.emit('find_game', timeControl);
+                  }}
+                >
+                  <Text style={styles.retryButtonText}>Try Again</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+          </View>
+        ) : gamePhase === 'playing' ? (
+          <>
+            {/* ====== Top Player (Opponent) ====== */}
+            <View style={styles.playerInfoTop}>
+              <View style={styles.playerDetails}>
+                <Image 
+                  source={{ uri: 'https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg' }} 
+                  style={styles.playerAvatar} 
+                />
+                <View>
+                  <Text style={styles.playerName}>{opponentInfo.name}</Text>
+                  <Text style={styles.playerRating}>{opponentInfo.rating}</Text>
+                  {/* If you want to show opponent country, ensure `country` is a string or image */}
+                  {opponentInfo.country ? (
+                    <Text style={styles.playerRating}>{opponentInfo.country}</Text>
+                  ) : null}
+                </View>
+              </View>
+              <View style={styles.timeContainer}>
+                <Text style={styles.timeText}>
+                  {formatTime(playerColor === 'white' ? blackTime : whiteTime)}
+                </Text>
               </View>
             </View>
-            <View style={styles.timeContainer}>
-              <Text style={styles.timeText}>
-                {formatTime(playerColor === 'white' ? blackTime : whiteTime)}
-              </Text>
-            </View>
-          </View>
 
-          {console.log('Attempting to render Chessboard:', { fen: game?.fen() })}
-          {gamePhase === 'playing' && game && (
+            {/* ====== Chess Board ====== */}
+            {gamePhase === 'playing' && game && (
               <CustomChessBoard
                 fen={boardFen}
                 onMove={handleChessBoardMove}
                 orientation={playerColor}
                 customPieces={{
-                  wK: require('@/assets/images/king-white.svg'),
-                  wQ: require('@/assets/images/queen-white.svg'),
-                  wB: require('@/assets/images/bishop-white.svg'),
-                  wN: require('@/assets/images/knight-white.svg'),
-                  wP: require('@/assets/images/white-pawn.svg'),
-                  wR: require('@/assets/images/rook-white.svg'),
-                  bK: require('@/assets/images/black-king.svg'),
-                  bQ: require('@/assets/images/black-queen.svg'),
-                  bB: require('@/assets/images/black-bishop.svg'),
-                  bN: require('@/assets/images/black-knight.svg'),
-                  bP: require('@/assets/images/black-pawn.svg'),
-                  bR: require('@/assets/images/black-rook.svg'),
+                  wK: require('@/assets/images/king-white.png'),
+                  wQ: require('@/assets/images/queen-white.png'),
+                  wB: require('@/assets/images/bishop-white.png'),
+                  wN: require('@/assets/images/knight-white.png'),
+                  wP: require('@/assets/images/white-pawn.png'),
+                  wR: require('@/assets/images/rook-white.png'),
+                  bK: require('@/assets/images/black-king.png'),
+                  bQ: require('@/assets/images/black-queen.png'),
+                  bB: require('@/assets/images/black-bishop.png'),
+                  bN: require('@/assets/images/black-knight.png'),
+                  bP: require('@/assets/images/black-pawn.png'),
+                  bR: require('@/assets/images/black-rook.png'),
                 }}
               />
             )}
 
-          <View style={styles.playerInfoBottom}>
-            <View style={styles.playerDetails}>
-              <Image 
-                source={{ uri: 'https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg' }} 
-                style={styles.playerAvatar} 
-              />
-              <View>
-                <Text style={styles.playerName}>You</Text>
-                <Text style={styles.playerRating}>1500</Text>
-                <Text style={styles.turnIndicator}>
-                  {game?.turn() === (playerColor === 'white' ? 'w' : 'b') 
-                    ? 'Your turn' 
-                    : 'Waiting...'}
+            {/* ====== Bottom Player (You) ====== */}
+            <View style={styles.playerInfoBottom}>
+              <View style={styles.playerDetails}>
+                <Image 
+                  source={{ uri: 'https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg' }} 
+                  style={styles.playerAvatar} 
+                />
+                <View>
+                  <Text style={styles.playerName}>You</Text>
+                  <Text style={styles.playerRating}>1500</Text>
+                  <Text style={styles.turnIndicator}>
+                    {game?.turn() === (playerColor === 'white' ? 'w' : 'b') 
+                      ? 'Your turn' 
+                      : 'Waiting...'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.timeContainer}>
+                <Text style={styles.timeText}>
+                  {formatTime(playerColor === 'white' ? whiteTime : blackTime)}
                 </Text>
               </View>
             </View>
-            <View style={styles.timeContainer}>
-              <Text style={styles.timeText}>
-                {formatTime(playerColor === 'white' ? whiteTime : blackTime)}
-              </Text>
+
+            {/* ====== Move History ====== */}
+            <View style={styles.controlsContainer}>
+              <MoveHistory moves={moveHistory} />
+            </View>
+          </>
+        ) : (
+          /* ====== GAME OVER PHASE ====== */
+          <View style={styles.resultContainer}>
+            <Text style={styles.resultText}>
+              {gameResult}
+            </Text>
+            <TouchableOpacity 
+              style={styles.returnButton}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.returnButtonText}>Return to Menu</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ====== The NEW Modal With Options ====== */}
+        <Modal
+          transparent={true}
+          visible={showOptionsModal}
+          animationType="slide"
+          onRequestClose={() => setShowOptionsModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Game Options</Text>
+               {/* Close button */}
+               <TouchableOpacity 
+  style={[styles.optionButton]} 
+  onPress={() => setShowOptionsModal(false)}
+>
+<Image source={cross} />
+</TouchableOpacity>
+</View>
+              
+              {/* Option: Draw */}
+              <TouchableOpacity 
+  style={[styles.optionButton, drawOffered && styles.disabledButton]} 
+  onPress={handleOfferDraw}
+  disabled={drawOffered}
+>
+  <Text style={styles.optionButtonText}>
+    {drawOffered ? "Draw Offered" : "Offer Draw"}
+  </Text>
+</TouchableOpacity>
+
+              {/* Option: Abort (calls handleAbort) */}
+              <TouchableOpacity style={styles.optionButton} onPress={handleAbort}>
+                <Text style={styles.optionButtonText}>Abort</Text>
+              </TouchableOpacity>
+
+              {/* Option: Share Game */}
+              <TouchableOpacity style={styles.optionButton} onPress={() => {
+                Alert.alert("Share Game not implemented yet!");
+              }}>
+                <Text style={styles.optionButtonText}>Share Game</Text>
+              </TouchableOpacity>
+
+              {/* Option: Settings */}
+              <TouchableOpacity style={styles.optionButton} onPress={() => {
+                Alert.alert("Settings not implemented yet!");
+              }}>
+                <Text style={styles.optionButtonText}>Settings</Text>
+              </TouchableOpacity>
+
+              {/* Option: Flip Board */}
+              <TouchableOpacity style={styles.optionButton} onPress={() => {
+                Alert.alert("Flip Board not implemented yet!");
+              }}>
+                <Text style={styles.optionButtonText}>Flip Board</Text>
+              </TouchableOpacity>
+
+              {/* Option: Disable Sounds */}
+             {/* Option: Disable Sounds */}
+<TouchableOpacity 
+  style={styles.optionButton} 
+  onPress={() => {
+    setIsMuted(!isMuted); // This will toggle the sound state
+    setShowOptionsModal(false); // Close the modal after pressing
+  }}
+>
+  <Text style={styles.optionButtonText}>
+    {isMuted ? "Enable Sounds" : "Disable Sounds"}
+  </Text>
+</TouchableOpacity>
+
+             
             </View>
           </View>
-
-          
-
-          <View style={styles.controlsContainer}>
-            <MoveHistory moves={moveHistory} />
-            <TouchableOpacity 
-  style={styles.resignButton} 
-  onPress={() => setShowResignConfirm(true)}
-  disabled={gamePhase !== 'playing'} // Disable if game not active
->
-  <Text style={styles.resignButtonText}>Resign Game</Text>
-</TouchableOpacity>
-          </View>
-        </>
-      ) : (
-        <View style={styles.resultContainer}>
-          <Text style={[
-            styles.resultText,
-            gameResult?.includes('won') ? styles.resultText : 
-            gameResult?.includes('lost') ? styles.resultText : 
-            styles.resultText
-          ]}>
-            {gameResult}
+        </Modal>
+        <Modal
+      transparent={true}
+      visible={opponentOfferedDraw}
+      animationType="slide"
+      onRequestClose={() => setOpponentOfferedDraw(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Draw Offer</Text>
+          <Text style={styles.drawOfferText}>
+            Your opponent has offered a draw. Do you accept?
           </Text>
-          <TouchableOpacity 
-            style={styles.returnButton}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.returnButtonText}>Return to Menu</Text>
-          </TouchableOpacity>
+          <View style={styles.drawButtonsContainer}>
+            <TouchableOpacity 
+              style={[
+                styles.drawResponseButton, 
+                styles.acceptButton,
+                selectedOption === 'accept' && styles.selectedButton
+              ]} 
+              onPress={() => {
+                setSelectedOption('accept');
+                handleAcceptDraw();
+              }}
+              activeOpacity={0.7}
+              pressRetentionOffset={{top: 10, left: 10, bottom: 10, right: 10}}
+            >
+              <Text style={styles.drawResponseButtonText}>Accept</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[
+                styles.drawResponseButton, 
+                styles.declineButton,
+                selectedOption === 'decline' && styles.selectedButton
+              ]} 
+              onPress={() => {
+                setSelectedOption('decline');
+                handleDeclineDraw();
+              }}
+              activeOpacity={0.7}
+              pressRetentionOffset={{top: 10, left: 10, bottom: 10, right: 10}}
+            >
+              <Text style={styles.drawResponseButtonText}>Decline</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      )}
+      </View>
+    </Modal>
 
-<Modal
+
+    <Modal
+  animationType="fade"
   transparent={true}
-  visible={showResignConfirm}
-  animationType="slide"
-  onRequestClose={() => setShowResignConfirm(false)}
+  visible={showAbortConfirm}
+  onRequestClose={() => setShowAbortConfirm(false)}
 >
-  <View style={styles.modalOverlay}>
-    <View style={styles.modalContainer}>
-      <Text style={styles.modalText}>
-        Are you sure you want to resign?
+  <View style={{
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  }}>
+    <View style={{
+      backgroundColor: '#292929',
+      borderRadius: 12,
+      padding: 20,
+      width: '80%',
+      alignItems: 'center'
+    }}>
+      <Text style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, color:'#fff' }}>
+        Do you want to resign the game?
       </Text>
-      <View style={styles.modalButtons}>
-        <TouchableOpacity 
-          style={[styles.modalButton, styles.confirmButton]}
-          onPress={handleResign}
-          disabled={gamePhase !== 'playing'} // Disable if game ended
+      <View style={{ flexDirection: 'row', gap: 20 }}>
+        <TouchableOpacity
+          onPress={() => {
+            setShowAbortConfirm(false);
+            handleAbort(); // Trigger abort logic here
+          }}
+          style={{ backgroundColor: '#3D3D3D', padding: 10, borderRadius: 8 }}
         >
-          <Text style={styles.modalButtonText}>Confirm Resign</Text>
+          <Text style={{ color: 'white' }}>Yes</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.modalButton, styles.cancelButton]}
-          onPress={() => setShowResignConfirm(false)}
+
+        <TouchableOpacity
+          onPress={() => setShowAbortConfirm(false)}
+          style={{ backgroundColor: '#3D3D3D', padding: 10, borderRadius: 8 }}
         >
-          <Text style={styles.modalButtonText}>Cancel</Text>
+          <Text style={{ color: 'white' }}>No</Text>
         </TouchableOpacity>
       </View>
     </View>
   </View>
 </Modal>
-    </SafeAreaView>
+
+
+
+
+
+
+
+
+
+
+
+
+    <View style={styles.footer}>
+  <View style={styles.footerEle}>
+    <TouchableOpacity style={styles.footerButton}  onPress={() => setShowOptionsModal(true)}
+      disabled={gamePhase !== 'playing'}
+      accessibilityLabel="Back button"
+      accessibilityHint="Opens game options menu">
+      <Image source={menu} style={styles.footerIcon} />
+    </TouchableOpacity>
+    
+    <TouchableOpacity style={styles.footerButton}>
+      <Image source={analysis} style={styles.footerIcon} />
+    </TouchableOpacity>
+    
+    <TouchableOpacity style={styles.footerButton}>
+      <Image source={left} style={styles.footerIcon} />
+    </TouchableOpacity>
+    
+    <TouchableOpacity style={styles.footerButton}>
+      <Image source={right} style={styles.footerIcon} />
+    </TouchableOpacity>
+  </View>
+</View>
+      </SafeAreaView>
     </GestureHandlerRootView>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {
@@ -733,19 +981,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   playerInfoTop: {
+    height:76,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#292929',
     padding: 10,
   
     borderColor: '#4CAF50',
   },
   playerInfoBottom: {
+    height:76,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#292929',
     padding: 10,
   
     borderColor: '#4CAF50',
@@ -781,14 +1031,18 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
   timeContainer: {
-    backgroundColor: '#2C2C2C',
+    backgroundColor: '#202020',
+    width:79,
+    height:44,
     paddingHorizontal: 15,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 4,
   },
   timeText: {
     color: 'white',
     fontWeight: '600',
+    textAlign:"center",
+    
   },
   controlsContainer: {
     backgroundColor: '#1E1E1E',
@@ -836,12 +1090,12 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  // modalOverlay: {
+  //   flex: 1,
+  //   backgroundColor: 'rgba(0,0,0,0.5)',
+  //   justifyContent: 'center',
+  //   alignItems: 'center',
+  // },
   modalContainer: {
     backgroundColor: '#2C2C2C',
     borderRadius: 10,
@@ -896,27 +1150,164 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     lineHeight: 36, // For better multiline text display
   },
-  header:{
-    flexDirection:"row",
-    justifyContent:"center",
-    alignItems:"center",
-    marginBottom:40
-    
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 15,
+    marginBottom:45,
+    backgroundColor: '#000', // or your preferred color
+  },
+  centerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  backButton: {
+    width: 19, // adjust as needed
+    height: 19.5, // adjust as needed
+    color:'#fff',
+    marginLeft: 5,
   },
   logo: {
-    height: 32,
-    width: 19.58,
-    borderRadius: 25,
-   
-    
-    
+    width: 19.58, // adjust as needed
+    height: 32, // adjust as needed
+    color:'#fff',
+    marginRight: 10,
   },
-  htext:{
-    marginLeft:8,
-    fontSize:16,
-    fontWeight:600,
-    color:"#fff"
-  }
+  htext: {
+    fontSize: 16,
+    fontWeight: 600,
+    color:'#fff',
+  },
+  muteButton: {
+    
+    width: 21, // adjust as needed
+    height: 15, // adjust as needed
+    color:'#fff',
+    marginRight: 10,
+  },
+  dspeaker: {
+    
+    width: 21, // adjust as needed
+    height: 15, // adjust as needed
+    color:'#fff',
+    marginRight: 10,
+  },
+ 
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)', 
+    justifyContent: 'flex-end', 
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '100%',
+    height: 406,
+    backgroundColor: '#292929',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 16,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between'
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 20,
+    marginTop: 12,
+    fontWeight: '400'
+  },
+  drawOfferText: {
+    fontSize: 16,
+    color: 'white',
+    marginVertical: 20,
+  },
+  drawButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    width: '100%',
+    marginTop: 10,
+  },
+  drawResponseButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 5,
+    borderWidth: 0,  // Default: no border
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  pressedButton: {
+    borderWidth: 1,
+    borderColor: '#ffffff',  // White border only when pressed
+  },
+  acceptButton: {
+    backgroundColor: '#3D3D3D',
+    height:60,
+    width:100,
+  },
+  declineButton: {
+    backgroundColor: '#3D3D3D',
+    height:60,
+    width:100
+  },
+  selectedButton: {
+    borderWidth: 1,
+    borderColor: '#ffffff',  // White border for the selected button
+  },
+  drawResponseButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 500,
+    textAlign: 'center',
+    marginTop:8
+  },
+  cross:{
+   
+    color:'#fff'
+  },
+  optionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  optionButton: {
+    backgroundColor: '#333',
+    paddingVertical: 12,
+
+    borderRadius: 6,
+    marginVertical: 5,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  footer: {
+    height: 63,
+    marginTop:33,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    backgroundColor: '#292929',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+  },
+  footerEle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between', // This creates equal space between items
+    alignItems: 'center',
+    width: '100%', // Ensure it spans full width
+  },
+  footerButton: {
+    padding: 10, // Makes the touch area larger
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerIcon: {
+    width: 24, // Set appropriate dimensions for your icons
+    height: 24,
+    resizeMode: 'contain',
+  },
 });
 
 export default function GameScreenWrapper() {

@@ -1,4 +1,4 @@
-// components/SplashScreen.jsx
+// components/SplashScreen/SplashScreen.jsx
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Image } from 'react-native';
 import { useRouter } from 'expo-router';
