@@ -66,7 +66,6 @@ const GameScreen: React.FC = () => {
     rating: 1500,
   });
   const [whiteTime, setWhiteTime] = useState<number>(0);
-  const chessboardRef = useRef(null);
   const [blackTime, setBlackTime] = useState<number>(0);
   const [gamePhase, setGamePhase] = useState<GamePhase>('matchmaking');
   const [matchmakingStatus, setMatchmakingStatus] = useState<MatchmakingStatus>('idle');
@@ -287,7 +286,7 @@ const GameScreen: React.FC = () => {
       socket.emit('make_move', {
         gameId,
         from: moveObj.from,
-        to: moveObj.to,
+        to: moveObj.to, 
         promotion: moveObj.promotion
       });
       
