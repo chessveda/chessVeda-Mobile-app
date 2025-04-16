@@ -11,8 +11,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '@/components/context/authContext';
 import { useRouter } from 'expo-router';
 import mongoose from 'mongoose';
+import RecentGameCard from '@/components/RecentGames/recentGames';
 
-const API_URL = "http://172.16.0.112:8080";
+const API_URL = "http://172.16.0.133:8080";
 
 
 const styles = StyleSheet.create({
@@ -295,16 +296,26 @@ interface RatingHistory {
 }
 
 interface GameHistory {
-  gameId: typeof mongoose.Schema.Types.ObjectId;
-  result: 'win' | 'loss' | 'draw';
-  ratingChange: number;
-  opponentId: typeof mongoose.Schema.Types.ObjectId;
-  timestamp: Date;
-  opponent?: {
+  gameId: string;
+  opponent: {
+    id: string;
     name: string;
-    rating: number;
   };
-  timeControl?: string;
+  userColor: 'white' | 'black';
+  whitePlayer: string;
+  blackPlayer: string;
+  status: string;
+  result: {
+    winner: string | null; // User ID or null
+    reason: string | null;
+  };
+  gameType: 'bullet' | 'blitz' | 'standard';
+  timeControl: number;
+  createdAt: Date;
+  endedAt: Date | null;
+  moves: number;
+  whiteRating: number; // Added
+  blackRating: number; // Added
 }
 
 interface UserProfile {
@@ -314,13 +325,20 @@ interface UserProfile {
   gender: 'Male' | 'Female';
   dob: Date;
   country: string;
-  rating: number;
-  gamesPlayed: number;
-  wins: number;
-  losses: number;
-  draws: number;
-  gameHistory: GameHistory[];
-  ratingHistory: RatingHistory[];
+  rating: {
+    standard: number;
+    blitz: number;
+    bullet: number;
+  };
+  games: string[];
+  stats: {
+    wins: number;
+    losses: number;
+    draws: number;
+    totalGames: number;
+  };
+  gameHistory?: GameHistory[];
+  ratingHistory?: RatingHistory[];
 }
 
 const GameModeModal = ({ modalVisible, setModalVisible, handlePlay, isSearching, setIsSearching } : any) => {
@@ -465,7 +483,7 @@ const StatsCard = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const auth = useContext(AuthContext);
   const router = useRouter();
-  
+
   useEffect(() => {
     if (!auth?.userId) {
       console.log("User ID is still null, waiting...");
@@ -492,32 +510,12 @@ const StatsCard = () => {
 
     fetchProfile();
     if (!auth?.userId) {
-      router.replace("/auth");    
+      router.replace("/auth");
     }
   }, [auth?.userId, auth?.token]);
 
-  // Calculate stats for last 30 days
-  const getLastMonthStats = () => {
-    if (!profile || !profile.gameHistory) return { wins: 0, losses: 0, draws: 0 };
-    
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
-    
-    // Filter games from the last 30 days
-    const recentGames = profile.gameHistory.filter(game => {
-      const gameDate = new Date(game.timestamp);
-      return gameDate >= thirtyDaysAgo;
-    });
-    
-    // Count results
-    return {
-      wins: recentGames.filter(game => game.result === 'win').length,
-      losses: recentGames.filter(game => game.result === 'loss').length,
-      draws: recentGames.filter(game => game.result === 'draw').length
-    };
-  };
-
-  const lastMonthStats = getLastMonthStats();
+  // Use stats directly since gameHistory is not available
+  const lastMonthStats = profile?.stats || { wins: 0, losses: 0, draws: 0 };
 
   return (
     <View style={styles.cardContainer}>
@@ -562,160 +560,165 @@ const StatsCard = () => {
   );
 };
 
-const RecentGameCard = () => {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [recentGames, setRecentGames] = useState<any[]>([]);
-  const auth = useContext(AuthContext);
-  
-  useEffect(() => {
-    if (!auth?.userId) return;
+// const RecentGameCard = () => {
+//   const [profile, setProfile] = useState<UserProfile | null>(null);
+//   const [recentGames, setRecentGames] = useState<any[]>([]);
+//   const auth = useContext(AuthContext);
 
-    const fetchProfile = async () => {
-      try {
-        const response = await axios.get(
-          `${API_URL}/api/profile/${auth.userId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${auth.token}`,
-            },
-          }
-        );
-        setProfile(response.data.user);
-        
-        // Process game history to get recent games with opponent details
-        if (response.data.user.gameHistory && response.data.user.gameHistory.length > 0) {
-          // Get the 3 most recent games
-          const sortedGames = [...response.data.user.gameHistory]
-            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-            .slice(0, 3);
-          
-          // For each game, fetch opponent details or use cached data
-          const gamesWithOpponents = await Promise.all(sortedGames.map(async (game) => {
-            // If we already have opponent details, use them
-            if (game.opponent) {
-              return {
-                id: game.gameId.toString(),
-                type: game.timeControl || 'rapid', // Default to rapid if timeControl is missing
-                opponent: game.opponent.name,
-                rating: game.opponent.rating,
-                result: game.result
-              };
-            }
-            
-            // Otherwise fetch opponent details
-            try {
-              const opponentResponse = await axios.get(
-                `${API_URL}/api/profile/${game.opponentId}`,
-                {
-                  headers: {
-                    Authorization: `Bearer ${auth.token}`,
-                  },
-                }
-              );
-              
-              return {
-                id: game.gameId.toString(),
-                type: game.timeControl || 'rapid', // Default to rapid
-                opponent: opponentResponse.data.user.name,
-                rating: opponentResponse.data.user.rating,
-                result: game.result
-              };
-            } catch (err) {
-              // If opponent fetch fails, use placeholder data
-              return {
-                id: game.gameId.toString(),
-                type: game.timeControl || 'rapid',
-                opponent: 'Opponent',
-                rating: 1200,
-                result: game.result
-              };
-            }
-          }));
-          
-          setRecentGames(gamesWithOpponents);
-        }
-      } catch (err) {
-        console.log("Profile fetch error:", err);
-      }
-    };
+//   useEffect(() => {
+//     if (!auth?.userId) return;
 
-    fetchProfile();
-  }, [auth?.userId, auth?.token]);
+//     const fetchGameHistory = async () => {
+//       try {
+//         // Fetch profile
+//         const profileResponse = await axios.get(
+//           `${API_URL}/api/auth/profile/${auth.userId}`,
+//           {
+//             headers: {
+//               Authorization: `Bearer ${auth.token}`,
+//             },
+//           }
+//         );
+//         setProfile(profileResponse.data.user);
 
-  const getGameTypeImage = (type: string) => {
-    switch (type?.toLowerCase()) {
-      case 'bullet': return bullet;
-      case 'blitz': return bullet;
-      case 'rapid': return rapid;
-      case 'classical': return rapid;
-      default: return bullet;
-    }
-  };
+//         // Fetch game history
+//         const historyResponse = await axios.get(
+//           `${API_URL}/api/game/history/${auth.userId}`,
+//           {
+//             headers: {
+//               Authorization: `Bearer ${auth.token}`,
+//             },
+//           }
+//         );
 
-  const getResultStyle = (result: string) => {
-    switch (result) {
-      case 'win': return { backgroundColor: '#4CAF50' };
-      case 'loss': return { backgroundColor: '#FF5252' };
-      case 'draw': return { backgroundColor: '#FFC107' };
-      default: return { backgroundColor: '#888888' };
-    }
-  };
+//         const gameHistory = historyResponse.data.games;
 
-  const getResultSymbol = (result: string) => {
-    switch (result) {
-      case 'win': return '+';
-      case 'loss': return '−';
-      case 'draw': return '=';
-      default: return '−';
-    }
-  };
+//         if (gameHistory && gameHistory.length > 0) {
+//           // Get the 3 most recent games
+//           const sortedGames = gameHistory
+//             .sort((a: GameHistory, b: GameHistory) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+//             .slice(0, 3);
 
-  return (
-    <View style={styles.cardContainer}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Text style={styles.cardTitle}>Recent Games</Text>
-        <TouchableOpacity style={styles.seeAllButton}>
-          <Text style={styles.seeAllText}>See All</Text>
-        </TouchableOpacity>
-      </View>
+//           // Transform games for display
+//           const gamesForDisplay = sortedGames.map((game: GameHistory) => {
+//             // Determine result based on userColor and winner
+//             let result: 'win' | 'loss' | 'draw';
+//             if (game.result.reason === 'agreement' || game.result.winner === null) {
+//               result = 'draw';
+//             } else if (game.result.winner === auth.userId) {
+//               result = 'win';
+//             } else {
+//               result = 'loss';
+//             }
 
-      {recentGames.length > 0 ? (
-        recentGames.map((game) => (
-          <View key={game.id} style={styles.recentGameRow}>
-            <View style={styles.recentGamePlayer}>
-              <Image
-                source={getGameTypeImage(game.type)}
-                style={styles.gameTypeImage}
-              />
-              <Ionicons
-                name="person-circle"
-                size={40}
-                color="#808080"
-                style={styles.playerAvatar}
-              />
-              <Text style={styles.playerName}>
-                {game.opponent}
-                <Text style={styles.ratingText}> ({game.rating})</Text>
-              </Text>
-            </View>
-            <View style={styles.resultContainer}>
-              <View style={[styles.resultIndicator, getResultStyle(game.result)]}>
-                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>
-                  {getResultSymbol(game.result)}
-                </Text>
-              </View>
-              <Ionicons name="arrow-forward" size={24} color="#888888" />
-            </View>
-          </View>
-        ))
-      ) : (
-        <Text style={{ color: '#888888', textAlign: 'center', padding: 20 }}>
-          No recent games found
-        </Text>
-      )}
-    </View>
-  );
-};
+//             return {
+//               id: game.gameId,
+//               type: game.gameType || 'blitz',
+//               whitePlayer: game.whitePlayer,
+//               blackPlayer: game.blackPlayer,
+//               userColor: game.userColor,
+//               result,
+//             };
+//           });
+
+//           setRecentGames(gamesForDisplay);
+//         }
+//       } catch (err) {
+//         console.log('Game history fetch error:', err);
+//       }
+//     };
+
+//     fetchGameHistory();
+//   }, [auth?.userId, auth?.token]);
+
+//   const getGameTypeImage = (type: string | undefined | null) => {
+//     const gameType = type?.toLowerCase() || 'blitz';
+//     switch (gameType) {
+//       case 'bullet':
+//       case 'blitz':
+//         return bullet;
+//       case 'standard':
+//       case 'rapid':
+//       case 'classical':
+//         return rapid;
+//       default:
+//         return bullet;
+//     }
+//   };
+
+//   const getResultStyle = (result: string) => {
+//     switch (result) {
+//       case 'win':
+//         return { backgroundColor: '#4CAF50' };
+//       case 'loss':
+//         return { backgroundColor: '#FF5252' };
+//       case 'draw':
+//         return { backgroundColor: '#FFC107' };
+//       default:
+//         return { backgroundColor: '#888888' };
+//     }
+//   };
+
+//   const getResultSymbol = (result: string) => {
+//     switch (result) {
+//       case 'win':
+//         return '+';
+//       case 'loss':
+//         return '−';
+//       case 'draw':
+//         return '=';
+//       default:
+//         return '−';
+//     }
+//   };
+
+//   return (
+//     <View style={styles.cardContainer}>
+//       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+//         <Text style={styles.cardTitle}>Recent Games</Text>
+//         <TouchableOpacity style={styles.seeAllButton}>
+//           <Text style={styles.seeAllText}>See All</Text>
+//         </TouchableOpacity>
+//       </View>
+
+//       {recentGames.length > 0 ? (
+//         recentGames.map((game) => (
+//           <View key={game.id} style={styles.recentGameRow}>
+//             <View style={styles.recentGamePlayer}>
+//               <Image
+//                 source={getGameTypeImage(game.type)}
+//                 style={styles.gameTypeImage}
+//               />
+//               <Ionicons
+//                 name="person-circle"
+//                 size={40}
+//                 color="#808080"
+//                 style={styles.playerAvatar}
+//               />
+//               <Text style={styles.playerName}>
+//                 {game.userColor === 'white' 
+//                   ? `${game.whitePlayer} vs ${game.blackPlayer}` 
+//                   : `${game.blackPlayer} vs ${game.whitePlayer}`}
+//               </Text>
+//             </View>
+//             <View style={styles.resultContainer}>
+//               <View style={[styles.resultIndicator, getResultStyle(game.result)]}>
+//                 <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>
+//                   {getResultSymbol(game.result)}
+//                 </Text>
+//               </View>
+//               <Ionicons name="arrow-forward" size={24} color="#888888" />
+//             </View>
+//           </View>
+//         ))
+//       ) : (
+//         <Text style={{ color: '#888888', textAlign: 'center', padding: 20 }}>
+//           No recent games found
+//         </Text>
+//       )}
+//     </View>
+//   );
+// };
 
 export default function Home() {
   const [modalVisible, setModalVisible] = useState(false);

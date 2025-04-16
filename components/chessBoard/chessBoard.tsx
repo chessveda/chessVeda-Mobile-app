@@ -37,7 +37,7 @@ const CustomChessBoard: React.FC<ChessBoardProps> = ({
   const displayRanks = orientation === 'black' ? [...ranks].reverse() : ranks;
 
   // Default PNG pieces if customPieces not provided
-  const defaultPieces = {
+  const defaultPieces : Record<string, any> = {
     wP: require('../../assets/images/white-pawn.svg'),
     bP: require('../../assets/images/black-pawn.png'),
     // wN: require('../../assets/images/white-knight.png'),
@@ -157,11 +157,12 @@ const CustomChessBoard: React.FC<ChessBoardProps> = ({
   const isLastMoveTo = lastMove && square === lastMove.to;
 
     // For displayed rank/file labels, use the original files/ranks arrays
-    // This ensures labels are always positioned consistently regardless of orientation
+  
+    // For displayed rank/file labels
     const actualFile = orientation === 'black' ? files[7 - colIndex] : files[colIndex];
     const actualRank = orientation === 'black' ? ranks[7 - rowIndex] : ranks[rowIndex];
 
-    // Show labels only on the edges of the board
+    // Show labels only on the edges
     const showRankLabel = orientation === 'white' ? colIndex === 0 : colIndex === 7;
     const showFileLabel = orientation === 'white' ? rowIndex === 7 : rowIndex === 0;
 
@@ -176,35 +177,33 @@ const CustomChessBoard: React.FC<ChessBoardProps> = ({
           isSelected && styles.selectedSquare,
           isValidMove && styles.validMoveSquare,
           isLastMoveFrom && styles.lastMoveFromSquare,
-    isLastMoveTo && styles.lastMoveToSquare,
+          isLastMoveTo && styles.lastMoveToSquare,
         ]}
         onPress={() => handleSquarePress(square)}
       >
-        {/* Rank label - place it on the left for white, right for black */}
+        {/* Rank label */}
         {showRankLabel && (
-          <Text
-            style={[
-              styles.rankLabel,
-              orientation === 'black' ? styles.rankLabelBlack : styles.rankLabelWhite
-            ]}
-          >
+          <Text style={[
+            styles.rankLabel,
+            orientation === 'black' ? styles.rankLabelBlack : styles.rankLabelWhite,
+            (isLastMoveFrom || isLastMoveTo) && styles.labelHighlight
+          ]}>
             {actualRank}
           </Text>
         )}
 
-        {/* File label - place it on the bottom for white, top for black */}
+        {/* File label */}
         {showFileLabel && (
-          <Text
-            style={[
-              styles.fileLabel,
-              orientation === 'black' ? styles.fileLabelBlack : styles.fileLabelWhite
-            ]}
-          >
+          <Text style={[
+            styles.fileLabel,
+            orientation === 'black' ? styles.fileLabelBlack : styles.fileLabelWhite,
+            (isLastMoveFrom || isLastMoveTo) && styles.labelHighlight
+          ]}>
             {actualFile}
           </Text>
         )}
 
-        {/* Render piece if present */}
+        {/* Render piece */}
         {piece && getPieceImage(piece)}
       </TouchableOpacity>
     );
@@ -298,11 +297,16 @@ const styles = StyleSheet.create({
     left: 2,
   },
   lastMoveFromSquare: {
-    backgroundColor: '#90EE90',
+    backgroundColor: 'rgba(144, 238, 144, 0.7)', // Light green for origin
   },
   lastMoveToSquare: {
-    backgroundColor: '#000',
+    backgroundColor: 'rgba(255, 255, 0, 0.7)', // Yellow for destination
   },
+  labelHighlight: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  
 });
 
 export default CustomChessBoard;

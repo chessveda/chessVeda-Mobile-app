@@ -32,7 +32,7 @@ import right from "@/assets/images/right.png"
 import axios from 'axios';
 
 
-const API_URL = "http://172.16.0.112:8080";
+const API_URL = "http://172.16.0.133:8080";
 
 
 type PlayerColor = 'white' | 'black';
@@ -191,7 +191,10 @@ useEffect(() => {
           : (data.whitePlayerDetails?.name || 'Opponent'),
         rating: isWhite 
           ? (data.blackPlayerDetails?.rating || 1500) 
-          : (data.whitePlayerDetails?.rating || 1500)
+          : (data.whitePlayerDetails?.rating || 1500),
+          country: typeof data.blackPlayerDetails?.country === 'string' 
+          ? data.blackPlayerDetails.country 
+          : undefined
       });
     } catch (error) {
       console.error('Error initializing game:', error);
@@ -312,7 +315,7 @@ useEffect(() => {
     }
 
     try {
-      const piece = game.get(moveObj.from);
+      const piece = game.get(moveObj.from as Square);
       if (!piece) {
         console.log('No piece at source square');
         return false;
@@ -689,11 +692,14 @@ useEffect(() => {
                 />
                 <View>
                   <Text style={styles.playerName}>{opponentInfo.name}</Text>
-                  <Text style={styles.playerRating}>{opponentInfo.rating}</Text>
+                  <Text style={styles.playerRating}>
+  {loadingProfile ? 'Loading...' : 
+   (profile?.ratings?.classical || profile?.rating || 'N/A')}
+</Text>
                   {/* If you want to show opponent country, ensure `country` is a string or image */}
-                  {opponentInfo.country ? (
-                    <Text style={styles.playerRating}>{opponentInfo.country}</Text>
-                  ) : null}
+                  {opponentInfo.country && typeof opponentInfo.country === 'string' ? (
+  <Text style={styles.playerRating}>{opponentInfo.country}</Text>
+) : null}
                 </View>
               </View>
               <View style={styles.timeContainer}>
@@ -949,17 +955,6 @@ useEffect(() => {
     </View>
   </View>
 </Modal>
-
-
-
-
-
-
-
-
-
-
-
 
     <View style={styles.footer}>
   <View style={styles.footerEle}>

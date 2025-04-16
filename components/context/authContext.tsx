@@ -55,7 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       reconnectionAttempts: 5, // Limit reconnection attempts
       reconnectionDelay: 1000,
       transports: ['websocket'],
-      timeout: 20000,
+      timeout: 200000,
     });
 
     newSocket.on('connect', () => {

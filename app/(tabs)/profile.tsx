@@ -17,7 +17,8 @@ import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import mongoose from 'mongoose';
-const API_URL = "http://172.16.0.112:8080";
+import RecentGameCard from "@/components/RecentGames/recentGames";
+const API_URL = "http://172.16.0.133:8080";
 
 // Define TypeScript interfaces based on the mongoose models
 interface RatingHistory {
@@ -99,22 +100,15 @@ const getRankTitle = (rating: number): string => {
 
 // Component for game type cards
 const GameTypeCards = ({ profile }: { profile: UserProfile | null }) => {
-  // Function to get rating for specific game type
-  // In a real implementation, you would have different ratings for different game types
-  // This is a placeholder until your database schema actually supports this
-  const getRatingForGameType = (gameType: string, baseRating: number): string => {
-    // This is a simple simulation - in a real app, this would come from the profile data
-    const variations: {[key: string]: number} = {
-      "Rapid": 0,
-      "Bullet": -50,
-      "Daily": -100,
-      "Classical": 30,
-      "Blitz": -150,
-      "Puzzles": -200
-    };
-    
-    const variation = variations[gameType] || 0;
-    return (baseRating + variation).toString();
+  
+  const getRatingForGameType = (gameType: string, ratingObj: any): string => {
+    // Convert gameType to lowercase to match keys like "bullet", "blitz", etc.
+    const key = gameType.toLowerCase();
+  
+    // Fallback to standard rating or 800 if specific rating doesn't exist
+    const rating = ratingObj?.[key] ?? ratingObj?.standard ?? 800;
+  
+    return rating.toString();
   };
 
   return (
@@ -206,83 +200,6 @@ const GameItem = ({ item }: { item: GameHistory }) => {
   );
 };
 
-// Component for the recent games section
-const RecentGames = ({ profile }: { profile: UserProfile | null }) => {
-  // Process game history to get recent games with opponent details
-  const [recentGames, setRecentGames] = useState<GameHistory[]>([]);
-  const auth = useContext(AuthContext);
-  
-  useEffect(() => {
-    if (!profile || !profile.gameHistory) return;
-    
-    const fetchRecentGames = async () => {
-      // Get the 5 most recent games
-      const sortedGames = [...profile.gameHistory]
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .slice(0, 5);
-      
-      // For each game, ensure we have opponent details
-      const gamesWithOpponents = await Promise.all(sortedGames.map(async (game) => {
-        // If we already have opponent details, use them
-        if (game.opponent) return game;
-        
-        // Otherwise fetch opponent details
-        try {
-          const opponentResponse = await axios.get(
-            `${API_URL}/api/profile/${game.opponentId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${auth.token}`,
-              },
-            }
-          );
-          
-          return {
-            ...game,
-            opponent: {
-              name: opponentResponse.data.user.name,
-              rating: opponentResponse.data.user.rating,
-              avatar: "https://randomuser.me/api/portraits/men/75.jpg" // Default avatar
-            }
-          };
-        } catch (err) {
-          console.log("Failed to fetch opponent details:", err);
-          // If opponent fetch fails, use placeholder data
-          return {
-            ...game,
-            opponent: {
-              name: "Opponent",
-              rating: 1200,
-              avatar: "https://randomuser.me/api/portraits/men/75.jpg"
-            }
-          };
-        }
-      }));
-      
-      setRecentGames(gamesWithOpponents);
-    };
-    
-    fetchRecentGames();
-  }, [profile, auth.token]);
-
-  return (
-    <View style={styles.recentGames}>
-      <SectionHeader title="Recent Games" />
-      {recentGames.length > 0 ? (
-        <FlatList
-          data={recentGames}
-          renderItem={({ item }) => <GameItem item={item} />}
-          keyExtractor={(item, index) => item.gameId?.toString() || index.toString()}
-          scrollEnabled={false}
-        />
-      ) : (
-        <Text style={{ color: '#888888', textAlign: 'center', padding: 20 }}>
-          No recent games found
-        </Text>
-      )}
-    </View>
-  );
-};
 
 // Component for section headers
 const SectionHeader = ({ title, children }: { title: string, children?: React.ReactNode }) => (
@@ -456,7 +373,8 @@ const Profile = () => {
             setSelectedMode={setSelectedMode} 
             profile={profile}
           />
-          <RecentGames profile={profile} />
+          {/* <RecentGames profile={profile} /> */}
+          <RecentGameCard />
 
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutButtonText}>Logout</Text>
