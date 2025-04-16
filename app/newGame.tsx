@@ -316,6 +316,7 @@ useEffect(() => {
 
     try {
       const piece = game.get(moveObj.from as Square);
+      const piece = game.get(moveObj.from as Square);
       if (!piece) {
         console.log('No piece at source square');
         return false;
