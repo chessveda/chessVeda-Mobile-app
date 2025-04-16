@@ -5,7 +5,10 @@ import { View, ActivityIndicator } from 'react-native';
 import { AuthContext } from '@/components/context/authContext';
 import SplashScreen from '@/components/SplashScreen/SplashScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+
 type RedirectPath = "/home" | "/auth";
+
 export default function Index() {
   const { isLoggedIn, userId } = useContext(AuthContext);
   const [isChecking, setIsChecking] = useState(true);
@@ -32,9 +35,11 @@ export default function Index() {
         setAuthComplete(true);
       }
     };
+    
     checkAuthStatus();
     return () => {};
   }, []);
+
   // Separate useEffect to handle redirect logic after auth state is known
   useEffect(() => {
     if (authComplete) {
@@ -43,9 +48,11 @@ export default function Index() {
       console.log('Redirect path set to:', path);
     }
   }, [authComplete, isLoggedIn]);
+
   if (showSplash) {
     return <SplashScreen />;
   }
+
   if (isChecking || !authComplete) {
     return (
       <View

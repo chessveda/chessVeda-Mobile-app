@@ -476,7 +476,7 @@ const StatsCard = () => {
       try {
         console.log("Fetching profile for userId:", auth.userId);
         const response = await axios.get(
-          `${API_URL}/api/profile/${auth.userId}`,
+          `${API_URL}/api/auth/profile/${auth.userId}`,
           {
             headers: {
               Authorization: `Bearer ${auth.token}`,
