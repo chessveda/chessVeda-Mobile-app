@@ -8,7 +8,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 
-const API_URL = "http://172.16.0.133:8080"
+const API_URL = "http://172.16.0.112:8080"
 
 export default function AuthFlow() {
     const auth = useContext(AuthContext);
