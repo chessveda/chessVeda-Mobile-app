@@ -9,13 +9,10 @@ import rapid from '@/assets/images/rapid.png';
 import logo from "@/assets/images/logo2.png";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthContext } from '@/components/context/authContext';
-import { UserProfile, TimeControlType } from "@/types/types";
-// import { EXPO_PUBLIC_API_URL } from '@env';
-import GameScreen from '../newGame';
-import { useAuth } from '@/hooks/authHook';
 import { useRouter } from 'expo-router';
+import mongoose from 'mongoose';
 
-const API_URL = "http://172.16.0.112:8080"
+const API_URL = "http://172.16.0.112:8080";
 
 
 const styles = StyleSheet.create({
@@ -292,6 +289,39 @@ const styles = StyleSheet.create({
   },
   
 });
+interface RatingHistory {
+  rating: number;
+  timestamp: Date;
+}
+
+interface GameHistory {
+  gameId: typeof mongoose.Schema.Types.ObjectId;
+  result: 'win' | 'loss' | 'draw';
+  ratingChange: number;
+  opponentId: typeof mongoose.Schema.Types.ObjectId;
+  timestamp: Date;
+  opponent?: {
+    name: string;
+    rating: number;
+  };
+  timeControl?: string;
+}
+
+interface UserProfile {
+  _id: string;
+  name: string;
+  email: string;
+  gender: 'Male' | 'Female';
+  dob: Date;
+  country: string;
+  rating: number;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  gameHistory: GameHistory[];
+  ratingHistory: RatingHistory[];
+}
 
 const GameModeModal = ({ modalVisible, setModalVisible, handlePlay, isSearching, setIsSearching } : any) => {
   const [selectedTime, setSelectedTime] = useState(10 * 60);
@@ -374,35 +404,35 @@ const GameModeModal = ({ modalVisible, setModalVisible, handlePlay, isSearching,
               {/* Improved Time Control Dropdown */}
               <View style={styles.dropdownWrapper}>
               <TouchableOpacity
-  style={[
-    styles.timeDropdown,
-    timeDropdownOpen && styles.timeDropdownExpanded
-  ]}
-  onPress={() => setTimeDropdownOpen(!timeDropdownOpen)}
->
-  <Text style={{ color: '#FFFFFF', fontSize: 16 }}>{getSelectedTimeLabel()}</Text>
-  <Text style={{ color: '#FFFFFF', fontSize: 18 }}>{timeDropdownOpen ? '▲' : '▼'}</Text>
-</TouchableOpacity>
+                style={[
+                  styles.timeDropdown,
+                  timeDropdownOpen && styles.timeDropdownExpanded
+                ]}
+                onPress={() => setTimeDropdownOpen(!timeDropdownOpen)}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 16 }}>{getSelectedTimeLabel()}</Text>
+                <Text style={{ color: '#FFFFFF', fontSize: 18 }}>{timeDropdownOpen ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
 
-  {timeDropdownOpen && (
-    <View style={styles.dropdownContainer}>
-      <ScrollView style={styles.dropdownOptionsList}>
-        {timeOptions.map((option) => (
-          <TouchableOpacity
-            key={option.value}
-            style={[
-              styles.dropdownOption,
-              selectedTime === option.value && styles.selectedDropdownOption
-            ]}
-            onPress={() => selectTimeOption(option)}
-          >
-            <Text style={styles.dropdownOptionText}>{option.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  )}
-</View>
+              {timeDropdownOpen && (
+                <View style={styles.dropdownContainer}>
+                  <ScrollView style={styles.dropdownOptionsList}>
+                    {timeOptions.map((option) => (
+                      <TouchableOpacity
+                        key={option.value}
+                        style={[
+                          styles.dropdownOption,
+                          selectedTime === option.value && styles.selectedDropdownOption
+                        ]}
+                        onPress={() => selectTimeOption(option)}
+                      >
+                        <Text style={styles.dropdownOptionText}>{option.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
 
 
               {isSearching ? (
@@ -433,10 +463,8 @@ const GameModeModal = ({ modalVisible, setModalVisible, handlePlay, isSearching,
 
 const StatsCard = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
-    const auth = useContext(AuthContext);
-    const userId = useContext(AuthContext);
-    const router = useRouter();
-    
+  const auth = useContext(AuthContext);
+  const router = useRouter();
   
   useEffect(() => {
     if (!auth?.userId) {
@@ -468,8 +496,28 @@ const StatsCard = () => {
     }
   }, [auth?.userId, auth?.token]);
 
-  // Handle redirection if no userId
-  
+  // Calculate stats for last 30 days
+  const getLastMonthStats = () => {
+    if (!profile || !profile.gameHistory) return { wins: 0, losses: 0, draws: 0 };
+    
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
+    
+    // Filter games from the last 30 days
+    const recentGames = profile.gameHistory.filter(game => {
+      const gameDate = new Date(game.timestamp);
+      return gameDate >= thirtyDaysAgo;
+    });
+    
+    // Count results
+    return {
+      wins: recentGames.filter(game => game.result === 'win').length,
+      losses: recentGames.filter(game => game.result === 'loss').length,
+      draws: recentGames.filter(game => game.result === 'draw').length
+    };
+  };
+
+  const lastMonthStats = getLastMonthStats();
 
   return (
     <View style={styles.cardContainer}>
@@ -492,15 +540,21 @@ const StatsCard = () => {
 
       <View style={styles.statsGrid}>
         <View style={styles.statBox}>
-          <Text style={[styles.statNumber, { color: '#4CAF50' }]}>40</Text>
+          <Text style={[styles.statNumber, { color: '#4CAF50' }]}>
+            {lastMonthStats.wins}
+          </Text>
           <Text style={styles.statLabel}>Wins</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={[styles.statNumber, { color: '#FF5252' }]}>10</Text>
+          <Text style={[styles.statNumber, { color: '#FF5252' }]}>
+            {lastMonthStats.losses}
+          </Text>
           <Text style={styles.statLabel}>Lose</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={[styles.statNumber, { color: '#FFC107' }]}>02</Text>
+          <Text style={[styles.statNumber, { color: '#FFC107' }]}>
+            {lastMonthStats.draws}
+          </Text>
           <Text style={styles.statLabel}>Drawn</Text>
         </View>
       </View>
@@ -509,21 +563,96 @@ const StatsCard = () => {
 };
 
 const RecentGameCard = () => {
-  const recentGames = [
-    { id: '1', type: 'bullet', opponent: 'Koby', rating: 1304, result: 'loss' },
-    { id: '2', type: 'rapid', opponent: 'Alex', rating: 1250, result: 'win' },
-    { id: '3', type: 'bullet', opponent: 'Maria', rating: 1375, result: 'draw' },
-  ];
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [recentGames, setRecentGames] = useState<any[]>([]);
+  const auth = useContext(AuthContext);
+  
+  useEffect(() => {
+    if (!auth?.userId) return;
 
-  const getGameTypeImage = (type : any) => {
-    switch (type) {
+    const fetchProfile = async () => {
+      try {
+        const response = await axios.get(
+          `${API_URL}/api/profile/${auth.userId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${auth.token}`,
+            },
+          }
+        );
+        setProfile(response.data.user);
+        
+        // Process game history to get recent games with opponent details
+        if (response.data.user.gameHistory && response.data.user.gameHistory.length > 0) {
+          // Get the 3 most recent games
+          const sortedGames = [...response.data.user.gameHistory]
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .slice(0, 3);
+          
+          // For each game, fetch opponent details or use cached data
+          const gamesWithOpponents = await Promise.all(sortedGames.map(async (game) => {
+            // If we already have opponent details, use them
+            if (game.opponent) {
+              return {
+                id: game.gameId.toString(),
+                type: game.timeControl || 'rapid', // Default to rapid if timeControl is missing
+                opponent: game.opponent.name,
+                rating: game.opponent.rating,
+                result: game.result
+              };
+            }
+            
+            // Otherwise fetch opponent details
+            try {
+              const opponentResponse = await axios.get(
+                `${API_URL}/api/profile/${game.opponentId}`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${auth.token}`,
+                  },
+                }
+              );
+              
+              return {
+                id: game.gameId.toString(),
+                type: game.timeControl || 'rapid', // Default to rapid
+                opponent: opponentResponse.data.user.name,
+                rating: opponentResponse.data.user.rating,
+                result: game.result
+              };
+            } catch (err) {
+              // If opponent fetch fails, use placeholder data
+              return {
+                id: game.gameId.toString(),
+                type: game.timeControl || 'rapid',
+                opponent: 'Opponent',
+                rating: 1200,
+                result: game.result
+              };
+            }
+          }));
+          
+          setRecentGames(gamesWithOpponents);
+        }
+      } catch (err) {
+        console.log("Profile fetch error:", err);
+      }
+    };
+
+    fetchProfile();
+  }, [auth?.userId, auth?.token]);
+
+  const getGameTypeImage = (type: string) => {
+    switch (type?.toLowerCase()) {
       case 'bullet': return bullet;
+      case 'blitz': return bullet;
       case 'rapid': return rapid;
+      case 'classical': return rapid;
       default: return bullet;
     }
   };
 
-  const getResultStyle = (result : any) => {
+  const getResultStyle = (result: string) => {
     switch (result) {
       case 'win': return { backgroundColor: '#4CAF50' };
       case 'loss': return { backgroundColor: '#FF5252' };
@@ -532,7 +661,7 @@ const RecentGameCard = () => {
     }
   };
 
-  const getResultSymbol = (result : any) => {
+  const getResultSymbol = (result: string) => {
     switch (result) {
       case 'win': return '+';
       case 'loss': return '−';
@@ -550,52 +679,40 @@ const RecentGameCard = () => {
         </TouchableOpacity>
       </View>
 
-      {[
-        // Sample Data
-        {
-          id: 'sample1',
-          type: 'blitz',
-          opponent: 'Magnus Carlsen',
-          rating: 2847,
-          result: 'win',
-        },
-        {
-          id: 'sample2',
-          type: 'bullet',
-          opponent: 'Hikaru Nakamura',
-          rating: 2736,
-          result: 'loss',
-        },
-        // Dynamic Data
-        ...recentGames,
-      ].map((game) => (
-        <View key={game.id} style={styles.recentGameRow}>
-          <View style={styles.recentGamePlayer}>
-            <Image
-              source={getGameTypeImage(game.type)}
-              style={styles.gameTypeImage}
-            />
-            <Ionicons
-              name="person-circle"
-              size={40}
-              color="#808080"
-              style={styles.playerAvatar}
-            />
-            <Text style={styles.playerName}>
-              {game.opponent}
-              <Text style={styles.ratingText}> ({game.rating})</Text>
-            </Text>
-          </View>
-          <View style={styles.resultContainer}>
-            <View style={[styles.resultIndicator, getResultStyle(game.result)]}>
-              <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>
-                {getResultSymbol(game.result)}
+      {recentGames.length > 0 ? (
+        recentGames.map((game) => (
+          <View key={game.id} style={styles.recentGameRow}>
+            <View style={styles.recentGamePlayer}>
+              <Image
+                source={getGameTypeImage(game.type)}
+                style={styles.gameTypeImage}
+              />
+              <Ionicons
+                name="person-circle"
+                size={40}
+                color="#808080"
+                style={styles.playerAvatar}
+              />
+              <Text style={styles.playerName}>
+                {game.opponent}
+                <Text style={styles.ratingText}> ({game.rating})</Text>
               </Text>
             </View>
-            <Ionicons name="arrow-forward" size={24} color="#888888" />
+            <View style={styles.resultContainer}>
+              <View style={[styles.resultIndicator, getResultStyle(game.result)]}>
+                <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 }}>
+                  {getResultSymbol(game.result)}
+                </Text>
+              </View>
+              <Ionicons name="arrow-forward" size={24} color="#888888" />
+            </View>
           </View>
-        </View>
-      ))}
+        ))
+      ) : (
+        <Text style={{ color: '#888888', textAlign: 'center', padding: 20 }}>
+          No recent games found
+        </Text>
+      )}
     </View>
   );
 };

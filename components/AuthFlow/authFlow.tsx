@@ -273,7 +273,7 @@ export default function AuthFlow() {
                             onPress={() => setShowCountryPicker(true)}
                         >
                             <Text style={styles.flagIcon}>
-                                {formData.countryCode ? String.fromCodePoint(...formData.countryCode.split('').map(char => 127397 + char.charCodeAt())) : "🌍"}
+                                {formData.countryCode ? String.fromCodePoint(...formData.countryCode.split('').map(char => 127397 + char.charCodeAt(0))) : "🌍"}
                             </Text>
                             <Text style={styles.countryText}>
                                 {formData.country || "Select a country"}

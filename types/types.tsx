@@ -8,6 +8,8 @@ export interface GameStats {
 }
 
 export interface GameHistoryEntry {
+  _id: string;
+  date: Date;
   gameId: string;
   timeControl: TimeControlType;
   result: 'win' | 'loss' | 'draw';

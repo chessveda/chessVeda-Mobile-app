@@ -280,13 +280,16 @@ interface ChessBoardProps {
   onMove?: (move: { from: string; to: string; promotion?: string }) => void;
   orientation?: 'white' | 'black';
   customPieces?: Record<string, any>;
+  lastMove?: { from: string; to: string };
 }
+
 
 const CustomChessBoard: React.FC<ChessBoardProps> = ({
   fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
   onMove,
   orientation = 'white',
   customPieces,
+  lastMove,
 }) => {
   const [game, setGame] = useState<Chess>(new Chess(fen));
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
@@ -418,6 +421,8 @@ const CustomChessBoard: React.FC<ChessBoardProps> = ({
   ) => {
     const isSelected = square === selectedSquare;
     const isValidMove = validMoves.includes(square);
+    const isLastMoveFrom = lastMove && square === lastMove.from;
+  const isLastMoveTo = lastMove && square === lastMove.to;
 
     // For displayed rank/file labels, use the original files/ranks arrays
     // This ensures labels are always positioned consistently regardless of orientation
@@ -428,6 +433,8 @@ const CustomChessBoard: React.FC<ChessBoardProps> = ({
     const showRankLabel = orientation === 'white' ? colIndex === 0 : colIndex === 7;
     const showFileLabel = orientation === 'white' ? rowIndex === 7 : rowIndex === 0;
 
+    
+
     return (
       <TouchableOpacity
         key={square}
@@ -436,6 +443,8 @@ const CustomChessBoard: React.FC<ChessBoardProps> = ({
           { backgroundColor: squareColor },
           isSelected && styles.selectedSquare,
           isValidMove && styles.validMoveSquare,
+          isLastMoveFrom && styles.lastMoveFromSquare,
+    isLastMoveTo && styles.lastMoveToSquare,
         ]}
         onPress={() => handleSquarePress(square)}
       >
@@ -555,6 +564,12 @@ const styles = StyleSheet.create({
   fileLabelBlack: {
     top: 2,
     left: 2,
+  },
+  lastMoveFromSquare: {
+    backgroundColor: '#90EE90',
+  },
+  lastMoveToSquare: {
+    backgroundColor: '#000',
   },
 });
 

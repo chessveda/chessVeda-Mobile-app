@@ -1,5 +1,3 @@
-//@ts-nocheck
-
 import React, { useState, useEffect, useContext } from "react";
 import {
   View,
@@ -17,142 +15,277 @@ import axios from "axios";
 
 import { LineChart } from 'react-native-chart-kit';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { UserProfile } from "@/types/types";
 import { useRouter } from 'expo-router';
+import mongoose from 'mongoose';
 const API_URL = "http://172.16.0.112:8080";
 
+// Define TypeScript interfaces based on the mongoose models
+interface RatingHistory {
+  rating: number;
+  timestamp: Date;
+}
 
+interface GameHistory {
+  gameId: typeof mongoose.Schema.Types.ObjectId;
+  result: 'win' | 'loss' | 'draw';
+  ratingChange: number;
+  opponentId: typeof mongoose.Schema.Types.ObjectId;
+  timestamp: Date;
+  opponent?: {
+    name: string;
+    rating: number;
+    avatar?: string;
+  };
+  timeControl?: string;
+}
 
-const recentGames = [
-  {
-    id: "1",
-    type: "bullet",
-    opponent: "Koby (1304)",
-    result: "-",
-    avatar: "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
-  },
-  {
-    id: "2",
-    type: "rapid",
-    opponent: "Koby (1304)",
-    result: "-",
-    avatar: "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
-  },
-  {
-    id: "3",
-    type: "bullet",
-    opponent: "Koby (1304)",
-    result: "-",
-    avatar: "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
-  },
-  {
-    id: "4",
-    type: "bullet",
-    opponent: "Koby (1304)",
-    result: "-",
-    avatar: "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
-  },
-  {
-    id: "5",
-    type: "bullet",
-    opponent: "Koby (1304)",
-    result: "-",
-    avatar: "https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg?auto=compress&cs=tinysrgb&w=1200&lazy=load",
-  },
-];
+interface UserProfile {
+  _id: string;
+  name: string;
+  email: string;
+  gender: 'Male' | 'Female';
+  dob: Date;
+  country: string;
+  rating: number;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  gameHistory: GameHistory[];
+  ratingHistory: RatingHistory[];
+}
 
 const gameTypes = [
-  { name: "Rapid", icon: require("../../assets/images/rapid.png"), rating: "1430" },
-  { name: "bullet", icon: require("../../assets/images/bullet.png"), rating: "1254" },
-  { name: "Daily", icon: require("../../assets/images/daily.png"), rating: "1200" },
-  { name: "Daily04", icon: require("../../assets/images/classical.png"), rating: "1430" },
-  { name: "Blitz", icon: require("../../assets/images/blitz.png"), rating: "892" },
-  { name: "Puzzles", icon: require("../../assets/images/freestyle.png"), rating: "400" },
+  { name: "Rapid", icon: require("../../assets/images/rapid.png"), ratingKey: "rapid" },
+  { name: "Bullet", icon: require("../../assets/images/bullet.png"), ratingKey: "bullet" },
+  { name: "Daily", icon: require("../../assets/images/daily.png"), ratingKey: "daily" },
+  { name: "Classical", icon: require("../../assets/images/classical.png"), ratingKey: "classical" },
+  { name: "Blitz", icon: require("../../assets/images/blitz.png"), ratingKey: "blitz" },
+  { name: "Puzzles", icon: require("../../assets/images/freestyle.png"), ratingKey: "puzzles" },
 ];
 
 // Component for the profile header section
-const ProfileHeader = ({ profile } : any) => (
+const ProfileHeader = ({ profile }: { profile: UserProfile | null }) => (
   <View style={styles.profileHeader}>
     <View style={styles.profileInfo}>
       {/* Replace icon with image from placeholder service */}
       <Image 
-  source={{ uri: "https://randomuser.me/api/portraits/men/75.jpg" }} 
-  style={styles.profileImage} 
-/>
+        source={{ uri: "https://randomuser.me/api/portraits/men/75.jpg" }} 
+        style={styles.profileImage} 
+      />
 
       <View style={styles.profileText}>
         <Text style={styles.profileName}>
-          {profile ? `${profile?.name}` : "Hello, There"}
+          {profile ? `${profile.name}` : "Hello, There"}
         </Text>
-        <Text style={styles.profileTitle}>Super Challenger</Text>
+        <Text style={styles.profileTitle}>
+          {profile ? `${getRankTitle(profile.rating)}` : "Super Challenger"}
+        </Text>
       </View>
     </View>
   </View>
 );
+
+// Function to determine rank title based on rating
+const getRankTitle = (rating: number): string => {
+  if (rating >= 2200) return "Grandmaster";
+  if (rating >= 2000) return "Master";
+  if (rating >= 1800) return "Expert";
+  if (rating >= 1600) return "Advanced";
+  if (rating >= 1400) return "Intermediate";
+  if (rating >= 1200) return "Novice";
+  return "Beginner";
+};
 
 // Component for game type cards
-const GameTypeCards = () => (
-  <View style={styles.gridContainer}>
-    {gameTypes.map((game, index) => (
-      <View key={index} style={styles.gameTypeCard}>
-        <View style={styles.gameTypeInfo}>
-        <Image 
-      source={game.icon} 
-      style={styles.gameTypeIcon} 
-    />
-          <Text style={styles.gameTypeName}>{game.name}</Text>
-        </View>
-        <Text style={styles.gameTypeRating}>{game.rating}</Text>
-      </View>
-    ))}
-  </View>
-);
+const GameTypeCards = ({ profile }: { profile: UserProfile | null }) => {
+  // Function to get rating for specific game type
+  // In a real implementation, you would have different ratings for different game types
+  // This is a placeholder until your database schema actually supports this
+  const getRatingForGameType = (gameType: string, baseRating: number): string => {
+    // This is a simple simulation - in a real app, this would come from the profile data
+    const variations: {[key: string]: number} = {
+      "Rapid": 0,
+      "Bullet": -50,
+      "Daily": -100,
+      "Classical": 30,
+      "Blitz": -150,
+      "Puzzles": -200
+    };
+    
+    const variation = variations[gameType] || 0;
+    return (baseRating + variation).toString();
+  };
 
+  return (
+    <View style={styles.gridContainer}>
+      {gameTypes.map((game, index) => (
+        <View key={index} style={styles.gameTypeCard}>
+          <View style={styles.gameTypeInfo}>
+            <Image 
+              source={game.icon} 
+              style={styles.gameTypeIcon} 
+            />
+            <Text style={styles.gameTypeName}>{game.name}</Text>
+          </View>
+          <Text style={styles.gameTypeRating}>
+            {profile ? getRatingForGameType(game.name, profile.rating) : "---"}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+};
 
 // Component for a single game item
-const GameItem = ({ item } : any) => (
-  <View>
-    <View style={styles.gameItem}>
-      <View style={styles.gameInfo}>
-        <Image
-          source={
-            item.type === "bullet"
-              ? require("../../assets/images/bullet.png")
-              : require("../../assets/images/rapid.png")
-          }
-          style={styles.gameIcon}
-        />
-        <View style={styles.opponentInfo}>
-          <Image source={{ uri: item.avatar }} style={styles.avatar} />
-          <Text style={styles.opponentName}>{item.opponent}</Text>
+const GameItem = ({ item }: { item: GameHistory }) => {
+  // Determine game icon based on timeControl
+  const getGameIcon = (timeControl?: string) => {
+    if (!timeControl) return require("../../assets/images/rapid.png");
+    
+    switch(timeControl.toLowerCase()) {
+      case 'bullet':
+      case 'blitz':
+        return require("../../assets/images/bullet.png");
+      case 'classical':
+      case 'rapid':
+      default:
+        return require("../../assets/images/rapid.png");
+    }
+  };
+  
+  // Get result badge style based on result
+  const getResultBadgeStyle = (result: string) => {
+    switch(result) {
+      case 'win': return { backgroundColor: '#4CAF50' };
+      case 'loss': return { backgroundColor: '#FF5252' };
+      case 'draw': return { backgroundColor: '#FFC107' };
+      default: return { backgroundColor: '#888888' };
+    }
+  };
+  
+  // Get result text
+  const getResultText = (result: string) => {
+    switch(result) {
+      case 'win': return '+';
+      case 'loss': return '−';
+      case 'draw': return '=';
+      default: return '−';
+    }
+  };
+
+  return (
+    <View>
+      <View style={styles.gameItem}>
+        <View style={styles.gameInfo}>
+          <Image
+            source={getGameIcon(item.timeControl)}
+            style={styles.gameIcon}
+          />
+          <View style={styles.opponentInfo}>
+            <Image 
+              source={{ 
+                uri: item.opponent?.avatar || "https://randomuser.me/api/portraits/men/75.jpg"
+              }} 
+              style={styles.avatar} 
+            />
+            <Text style={styles.opponentName}>
+              {item.opponent?.name || "Opponent"} ({item.opponent?.rating || 1200})
+            </Text>
+          </View>
+        </View>
+        <View style={styles.gameResult}>
+          <View style={[styles.resultBadge, getResultBadgeStyle(item.result)]}>
+            <Text style={styles.resultText}>{getResultText(item.result)}</Text>
+          </View>
+          <Icon name="arrow-forward" size={24} color="#fff" />
         </View>
       </View>
-      <View style={styles.gameResult}>
-        <View style={styles.resultBadge}>
-          <Text style={styles.resultText}>{item.result}</Text>
-        </View>
-        <Icon name="arrow-forward" size={24} color="#fff" />
-      </View>
+      <View style={styles.divider} />
     </View>
-    <View style={styles.divider} />
-  </View>
-);
+  );
+};
 
 // Component for the recent games section
-const RecentGames = () => (
-  <View style={styles.recentGames}>
-    <SectionHeader title="Recent Games" children={undefined} />
-    <FlatList
-      data={recentGames}
-      renderItem={({ item }) => <GameItem item={item} />}
-      keyExtractor={(item) => item.id}
-      scrollEnabled={false}
-    />
-  </View>
-);
+const RecentGames = ({ profile }: { profile: UserProfile | null }) => {
+  // Process game history to get recent games with opponent details
+  const [recentGames, setRecentGames] = useState<GameHistory[]>([]);
+  const auth = useContext(AuthContext);
+  
+  useEffect(() => {
+    if (!profile || !profile.gameHistory) return;
+    
+    const fetchRecentGames = async () => {
+      // Get the 5 most recent games
+      const sortedGames = [...profile.gameHistory]
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 5);
+      
+      // For each game, ensure we have opponent details
+      const gamesWithOpponents = await Promise.all(sortedGames.map(async (game) => {
+        // If we already have opponent details, use them
+        if (game.opponent) return game;
+        
+        // Otherwise fetch opponent details
+        try {
+          const opponentResponse = await axios.get(
+            `${API_URL}/api/profile/${game.opponentId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${auth.token}`,
+              },
+            }
+          );
+          
+          return {
+            ...game,
+            opponent: {
+              name: opponentResponse.data.user.name,
+              rating: opponentResponse.data.user.rating,
+              avatar: "https://randomuser.me/api/portraits/men/75.jpg" // Default avatar
+            }
+          };
+        } catch (err) {
+          console.log("Failed to fetch opponent details:", err);
+          // If opponent fetch fails, use placeholder data
+          return {
+            ...game,
+            opponent: {
+              name: "Opponent",
+              rating: 1200,
+              avatar: "https://randomuser.me/api/portraits/men/75.jpg"
+            }
+          };
+        }
+      }));
+      
+      setRecentGames(gamesWithOpponents);
+    };
+    
+    fetchRecentGames();
+  }, [profile, auth.token]);
+
+  return (
+    <View style={styles.recentGames}>
+      <SectionHeader title="Recent Games" />
+      {recentGames.length > 0 ? (
+        <FlatList
+          data={recentGames}
+          renderItem={({ item }) => <GameItem item={item} />}
+          keyExtractor={(item, index) => item.gameId?.toString() || index.toString()}
+          scrollEnabled={false}
+        />
+      ) : (
+        <Text style={{ color: '#888888', textAlign: 'center', padding: 20 }}>
+          No recent games found
+        </Text>
+      )}
+    </View>
+  );
+};
 
 // Component for section headers
-const SectionHeader = ({ title, children } : any) => (
+const SectionHeader = ({ title, children }: { title: string, children?: React.ReactNode }) => (
   <View style={styles.sectionHeader}>
     <Text style={styles.sectionTitle}>{title}</Text>
     {children || (
@@ -164,10 +297,49 @@ const SectionHeader = ({ title, children } : any) => (
 );
 
 // Component for the rating activity chart
-const RatingActivity = () => {
-  const [selectedDot, setSelectedDot] = useState(null);
+const RatingActivity = ({ 
+  selectedMode, 
+  setSelectedMode,
+  profile
+}: { 
+  selectedMode: string, 
+  setSelectedMode: React.Dispatch<React.SetStateAction<string>>,
+  profile: UserProfile | null
+}) => {
+  const [selectedDot, setSelectedDot] = useState<number | null>(null);
 
-  const handleDataPointClick = (data : any) => {
+  // Process rating history data for the chart
+  const processRatingHistory = () => {
+    if (!profile?.ratingHistory || profile.ratingHistory.length === 0) {
+      // Return default data if no history
+      return {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        data: [1200, 1200, 1200, 1200, 1200, 1200]
+      };
+    }
+
+    // Sort by timestamp
+    const sortedHistory = [...profile.ratingHistory]
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    
+    // Only keep up to 6 most recent entries for display
+    const recentHistory = sortedHistory.slice(-6);
+    
+    // Format labels as month abbreviations
+    const labels = recentHistory.map(entry => {
+      const date = new Date(entry.timestamp);
+      return date.toLocaleString('default', { month: 'short' });
+    });
+    
+    // Extract ratings
+    const data = recentHistory.map(entry => entry.rating);
+    
+    return { labels, data };
+  };
+
+  const chartData = processRatingHistory();
+
+  const handleDataPointClick = (data: any) => {
     // data.index is the index of the data point pressed
     setSelectedDot(data.index);
   };
@@ -180,8 +352,8 @@ const RatingActivity = () => {
 
       <LineChart
         data={{
-          labels: ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-          datasets: [{ data: [1150, 1100, 1180, 1290, 1250, 1320] }],
+          labels: chartData.labels,
+          datasets: [{ data: chartData.data }],
         }}
         width={475}
         height={167}
@@ -205,7 +377,7 @@ const RatingActivity = () => {
         withHorizontalLabels={false} 
         style={{ marginLeft:-50}}
         onDataPointClick={handleDataPointClick}
-        renderDotContent={({ x, y, index, indexData } : any) => {
+        renderDotContent={({ x, y, index, indexData }: any) => {
           // Only render text if this dot is selected
           if (index === selectedDot) {
             return (
@@ -231,7 +403,6 @@ const RatingActivity = () => {
   );
 };
 
-
 // Main Profile component
 const Profile = () => {
   const auth = useContext(AuthContext);
@@ -242,15 +413,20 @@ const Profile = () => {
   const handleLogout = async () => {
     try {
       await auth.logout();
-    
     } catch (error) {
       console.error("Logout failed:", error);
     }
   };
 
   useEffect(() => {
+    if (!auth?.userId) {
+      console.log("User ID is null, waiting...");
+      return;
+    }
+
     const fetchProfile = async () => {
       try {
+        console.log("Fetching profile for userId:", auth.userId);
         const response = await axios.get(
           `${API_URL}/api/profile/${auth.userId}`,
           {
@@ -260,26 +436,31 @@ const Profile = () => {
           }
         );
         setProfile(response.data.user);
+        console.log("Profile data:", response.data);
       } catch (err) {
-        console.log(err);
+        console.log("Profile fetch error:", err);
       }
     };
+
     fetchProfile();
-  }, []);
+  }, [auth?.userId, auth?.token]);
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
         <ProfileHeader profile={profile} />
-        <GameTypeCards />
+        <GameTypeCards profile={profile} />
         <View style={styles.contentContainer}>
-        <RatingActivity selectedMode={selectedMode} setSelectedMode={setSelectedMode} />
-        <RecentGames />
+          <RatingActivity 
+            selectedMode={selectedMode} 
+            setSelectedMode={setSelectedMode} 
+            profile={profile}
+          />
+          <RecentGames profile={profile} />
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-     <Text style={styles.logoutButtonText}>Logout</Text>
-   </TouchableOpacity>
-          
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>

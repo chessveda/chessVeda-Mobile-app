@@ -1,52 +1,52 @@
-// index.tsx 
+// index.tsx
 import { Redirect } from 'expo-router';
 import React, { useState, useEffect, useContext } from 'react';
-import { View, ActivityIndicator, Text } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { AuthContext } from '@/components/context/authContext';
 import SplashScreen from '@/components/SplashScreen/SplashScreen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+type RedirectPath = "/home" | "/auth";
 export default function Index() {
   const { isLoggedIn, userId } = useContext(AuthContext);
   const [isChecking, setIsChecking] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
-  const [debugInfo, setDebugInfo] = useState('');
-
+  const [authComplete, setAuthComplete] = useState(false);
+  const [redirectPath, setRedirectPath] = useState<RedirectPath | null>(null);
   useEffect(() => {
-    const checkStorageDebug = async () => {
+    const checkAuthStatus = async () => {
       try {
-        const keys = await AsyncStorage.getAllKeys();
-        const items = await AsyncStorage.multiGet(keys);
-        const info = items
-          .filter(([key]) => ['userId', 'token', 'loginTimestamp'].includes(key))
-          .map(([key, value]) => `${key}: ${key === 'token' ? (value ? 'exists' : 'null') : value}`)
-          .join('\n');
-        
-        setDebugInfo(info);
-        
-        // Give AuthContext time to restore the session (longer time for debug)
+        // First just hide the splash screen
+        setTimeout(() => {
+          setShowSplash(false);
+        }, 2000);
+        // Give AuthContext time to restore the session
         setTimeout(() => {
           console.log('Auth check complete. isLoggedIn:', isLoggedIn, 'userId:', userId);
           setIsChecking(false);
-          setShowSplash(false);
+          setAuthComplete(true); // Mark authentication check as complete
         }, 5000);
       } catch (e) {
-        console.error('Debug error:', e);
-        setDebugInfo('Error checking storage');
+        console.error('Auth check error:', e);
         setIsChecking(false);
         setShowSplash(false);
+        setAuthComplete(true);
       }
     };
-    
-    checkStorageDebug();
+    checkAuthStatus();
     return () => {};
-  }, [isLoggedIn, userId]);
-
+  }, []);
+  // Separate useEffect to handle redirect logic after auth state is known
+  useEffect(() => {
+    if (authComplete) {
+      const path: RedirectPath = isLoggedIn ? "/home" : "/auth";
+      setRedirectPath(path);
+      console.log('Redirect path set to:', path);
+    }
+  }, [authComplete, isLoggedIn]);
   if (showSplash) {
     return <SplashScreen />;
   }
-
-  if (isChecking) {
+  if (isChecking || !authComplete) {
     return (
       <View
         style={{
@@ -57,13 +57,13 @@ export default function Index() {
         }}
       >
         <ActivityIndicator size="large" color="#4CAF50" />
-        <Text style={{ color: 'white', marginTop: 20 }}>
-          {debugInfo}
-        </Text>
       </View>
     );
   }
-
-  console.log('Redirecting to:', isLoggedIn ? '/home' : '/auth');
-  return <Redirect href={isLoggedIn ? "/home" : "/auth"} />;
+  if (redirectPath) {
+    console.log('Redirecting to:', redirectPath);
+    return <Redirect href={redirectPath} />;
+  }
+  // Fallback with explicit path
+  return <Redirect href="/auth" />;
 }

@@ -22,7 +22,6 @@ import CustomChessBoard from '@/components/chessBoard/chessBoard';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import logo from "@/assets/images/logo2.png";
 import speaker from "@/assets/images/speaker.png";
-import Icon from 'react-native-vector-icons/FontAwesome';
 import backbtn from "@/assets/images/backbtn.png";
 import dspeaker from "@/assets/images/dspeaker.png";
 import cross from "@/assets/images/Cross.png";
@@ -30,6 +29,11 @@ import menu from "@/assets/images/Menu.png"
 import analysis from "@/assets/images/analysis.png"
 import left from "@/assets/images/left.png"
 import right from "@/assets/images/right.png"
+import axios from 'axios';
+
+
+const API_URL = "http://172.16.0.112:8080";
+
 
 type PlayerColor = 'white' | 'black';
 type GamePhase = 'matchmaking' | 'playing' | 'gameover';
@@ -63,7 +67,22 @@ interface MoveHandlerData {
   whiteTime: number;
   blackTime: number;
 }
-
+interface UserProfile {
+  _id: string;
+  name: string;
+  email: string;
+  rating: number;
+  ratings: {
+    classical: number;
+    
+  };
+  
+  wins?: number;
+  losses?: number;
+  draws?: number;
+  gameHistory?: any[];
+  ratingHistory?: any[];
+}
 const { width } = Dimensions.get('window');
 
 const GameScreen: React.FC = () => {
@@ -100,7 +119,35 @@ const [isMuted, setIsMuted] = useState(false);
 const [selectedOption, setSelectedOption] = useState('accept');
 const [showAbortConfirm, setShowAbortConfirm] = useState(false);
 
+const [profile, setProfile] = useState<UserProfile | null>(null);
+const [loadingProfile, setLoadingProfile] = useState<boolean>(false);
 
+
+
+useEffect(() => {
+  const fetchProfile = async () => {
+    if (!userId || !token) return;
+    
+    try {
+      setLoadingProfile(true);
+      const response = await axios.get<{ user: UserProfile }>(
+        `${API_URL}/api/profile/${userId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setProfile(response.data.user);
+    } catch (err) {
+      console.log("Profile fetch error:", err);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  fetchProfile();
+}, [userId, token]);
 
   // ======= Utility: Time formatting =======
   const formatTime = useCallback((seconds: number): string => {
@@ -662,6 +709,10 @@ const [showAbortConfirm, setShowAbortConfirm] = useState(false);
                 fen={boardFen}
                 onMove={handleChessBoardMove}
                 orientation={playerColor}
+                lastMove={moveHistory.length > 0 ? 
+                  { from: moveHistory[moveHistory.length - 1].slice(0, 2), 
+                    to: moveHistory[moveHistory.length - 1].slice(2, 4) } : 
+                  undefined}
                 customPieces={{
                   wK: require('@/assets/images/king-white.png'),
                   wQ: require('@/assets/images/queen-white.png'),
@@ -681,27 +732,35 @@ const [showAbortConfirm, setShowAbortConfirm] = useState(false);
 
             {/* ====== Bottom Player (You) ====== */}
             <View style={styles.playerInfoBottom}>
-              <View style={styles.playerDetails}>
-                <Image 
-                  source={{ uri: 'https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg' }} 
-                  style={styles.playerAvatar} 
-                />
-                <View>
-                  <Text style={styles.playerName}>You</Text>
-                  <Text style={styles.playerRating}>1500</Text>
-                  <Text style={styles.turnIndicator}>
-                    {game?.turn() === (playerColor === 'white' ? 'w' : 'b') 
-                      ? 'Your turn' 
-                      : 'Waiting...'}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.timeContainer}>
-                <Text style={styles.timeText}>
-                  {formatTime(playerColor === 'white' ? whiteTime : blackTime)}
-                </Text>
-              </View>
-            </View>
+  <View style={styles.playerDetails}>
+    <Image 
+      source={{ uri: 'https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg' }} 
+      style={styles.playerAvatar} 
+    />
+    <View>
+      <Text style={styles.playerName}>
+        {profile?.name || 'You'}
+      </Text>
+      {loadingProfile ? (
+        <ActivityIndicator size="small" color="#ffffff" />
+      ) : (
+        <Text style={styles.playerRating}>
+          {profile?.ratings?.classical || profile?.rating || 'N/A'}
+        </Text>
+      )}
+      <Text style={styles.turnIndicator}>
+        {game?.turn() === (playerColor === 'white' ? 'w' : 'b') 
+          ? 'Your turn' 
+          : 'Waiting...'}
+      </Text>
+    </View>
+  </View>
+  <View style={styles.timeContainer}>
+    <Text style={styles.timeText}>
+      {formatTime(playerColor === 'white' ? whiteTime : blackTime)}
+    </Text>
+  </View>
+</View>
 
             {/* ====== Move History ====== */}
             <View style={styles.controlsContainer}>
