@@ -5,7 +5,6 @@ import {
   Image, 
   StyleSheet, 
   TouchableOpacity, 
-  Modal, 
   Dimensions, 
   ActivityIndicator,
   Alert,
@@ -30,7 +29,14 @@ import analysis from "@/assets/images/analysis.png"
 import left from "@/assets/images/left.png"
 import right from "@/assets/images/right.png"
 import axios from 'axios';
-
+import { 
+  OptionsModal, 
+  DrawOfferModal, 
+  AbortConfirmModal,
+  GameResultModal
+} from '@/components/Modals';
+// Import MatchmakingModal separately to avoid type conflicts
+import MatchmakingModal from '@/components/Modals/MatchmakingModal';
 
 const API_URL = "http://172.16.0.133:8080";
 
@@ -39,10 +45,22 @@ type PlayerColor = 'white' | 'black';
 type GamePhase = 'matchmaking' | 'playing' | 'gameover';
 type MatchmakingStatus = 'idle' | 'searching' | 'found' | 'error';
 
+
+interface RatingDetails {
+  blitz: number;
+  bullet: number;
+  standard: number;
+  // These are optional since they contain complex objects
+  gamesPlayed?: any;
+  kFactor?: any;
+  provisional?: any;
+  ratingHistory?: any[];
+}
+
 interface PlayerDetails {
-  country?: ReactNode;
+  country?: string;
   name: string;
-  rating: number;
+  rating: number | RatingDetails;
 }
 
 interface GameStartData {
@@ -74,7 +92,8 @@ interface UserProfile {
   rating: number;
   ratings: {
     classical: number;
-    
+    blitz?: number;
+    bullet?: number;
   };
   
   wins?: number;
@@ -121,6 +140,11 @@ const [showAbortConfirm, setShowAbortConfirm] = useState(false);
 
 const [profile, setProfile] = useState<UserProfile | null>(null);
 const [loadingProfile, setLoadingProfile] = useState<boolean>(false);
+const [showResultModal, setShowResultModal] = useState<boolean>(false);
+const [resultType, setResultType] = useState<'victory' | 'defeat' | 'draw'>('victory');
+const [resultReason, setResultReason] = useState<string>('checkmate');
+const [resultRatingChange, setResultRatingChange] = useState<number>(0);
+const [resultNewRating, setResultNewRating] = useState<number | undefined>(undefined);
 
 
 
@@ -131,7 +155,7 @@ useEffect(() => {
     try {
       setLoadingProfile(true);
       const response = await axios.get<{ user: UserProfile }>(
-        `${API_URL}/api/profile/${userId}`,
+        `${API_URL}/api/auth/profile/${userId}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -148,6 +172,19 @@ useEffect(() => {
 
   fetchProfile();
 }, [userId, token]);
+
+ const handleRetryMatchmaking = () => {
+      setSearchTime(0);
+      socket?.emit('find_game', timeControl);
+      setMatchmakingStatus('searching');
+    };
+  
+    // Function to handle cancel in matchmaking modal
+    const handleCancelMatchmaking = () => {
+      socket?.emit('cancel_search');
+      setIsSearching(false);
+      router.back();
+    };
 
   // ======= Utility: Time formatting =======
   const formatTime = useCallback((seconds: number): string => {
@@ -192,7 +229,7 @@ useEffect(() => {
         rating: isWhite 
           ? (data.blackPlayerDetails?.rating || 1500) 
           : (data.whitePlayerDetails?.rating || 1500),
-          country: typeof data.blackPlayerDetails?.country === 'string' 
+        country: typeof data.blackPlayerDetails?.country === 'string' 
           ? data.blackPlayerDetails.country 
           : undefined
       });
@@ -262,8 +299,36 @@ useEffect(() => {
   }) => {
     const isWhite = playerColor === 'white';
     const playerWon = (result.winner === userId) ||
-                      (result.winner === (isWhite ? 'white' : 'black'));
-
+                    (result.winner === (isWhite ? 'white' : 'black'));
+    
+    // Determine result type (victory, defeat, draw)
+    let type: 'victory' | 'defeat' | 'draw';
+    if (result.winner === 'draw') {
+      type = 'draw';
+    } else {
+      type = playerWon ? 'victory' : 'defeat';
+    }
+    
+    // Set result state
+    setResultType(type);
+    setResultReason(result.reason);
+    
+    // Set rating changes if available
+    if (result.whiteRatingChange !== undefined && result.blackRatingChange !== undefined) {
+      const ratingChange = isWhite ? result.whiteRatingChange : result.blackRatingChange;
+      const newRating = isWhite ? result.whiteRating : result.blackRating;
+      
+      setResultRatingChange(ratingChange);
+      setResultNewRating(newRating);
+    }
+    
+    // Show result modal
+    setShowResultModal(true);
+    
+    // Update game phase
+    setGamePhase('gameover');
+    
+    // Prepare result text (for backward compatibility or other uses)
     let resultText = '';
     switch (result.reason) {
       case 'checkmate':
@@ -293,18 +358,17 @@ useEffect(() => {
       default:
         resultText = 'Game ended';
     }
-
+  
     if (result.whiteRatingChange && result.blackRatingChange) {
       const ratingChange = isWhite ? result.whiteRatingChange : result.blackRatingChange;
       const newRating = isWhite ? result.whiteRating : result.blackRating;
-
+  
       if (newRating) {
         resultText += `\nRating: ${newRating} (${ratingChange > 0 ? '+' : ''}${ratingChange})`;
       }
     }
-
+  
     setGameResult(resultText);
-    setGamePhase('gameover');
   }, [playerColor, userId]);
 
   // ======= Handle Local Move =======
@@ -469,6 +533,7 @@ useEffect(() => {
       }
       handleGameStart(data);
     };
+    
 
     const handleMatchmakingError = (error: string) => {
       console.log('Matchmaking error:', error);
@@ -487,6 +552,7 @@ useEffect(() => {
       Alert.alert("Draw Declined", "Your opponent declined the draw offer.");
       setDrawOffered(false);
     };
+   
 
     socket.on('game_waiting', handleGameWaiting);
     socket.on('game_start', handleGameStartWrapper);
@@ -611,377 +677,245 @@ useEffect(() => {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-  {/* Back button on the left */}
-  {gamePhase === 'playing' && (
-    <TouchableOpacity 
-    style={styles.backButton} 
-    onPress={() => setShowAbortConfirm(true)}
-  >
-    <Image source={backbtn} style={styles.backButton} />
-  </TouchableOpacity>
-  
-  )}
-  
-  {/* Logo and title in the center */}
-  <View style={styles.centerContainer} accessibilityRole="header">
-    <Image 
-      source={logo} 
-      style={styles.logo} 
-      accessibilityLabel="ChessVeda logo"
-    />
-    <Text style={styles.htext}>ChessVeda</Text>
-  </View>
-  
-  {/* Mute button on the right */}
-  <TouchableOpacity 
-    style={styles.muteButton}
-    onPress={() => setIsMuted(!isMuted)}
-    accessibilityLabel={isMuted ? "Unmute sound" : "Mute sound"}
-    accessibilityHint="Toggles game sound on and off"
-  >
-   <Image 
-  source={isMuted ? dspeaker : speaker} 
-  style={[styles.muteButton, isMuted && styles.dspeaker]} 
-/>
-  </TouchableOpacity>
-</View>
-        {/* ====== MATCHMAKING PHASE ====== */}
-        {gamePhase === 'matchmaking' ? (
-          <View style={styles.searchingContainer}>
-            {matchmakingStatus === 'searching' ? (
-              <>
-                <Text style={styles.searchingText}>
-                  Searching for opponent... {formatTime(searchTime)}
-                  {'\n'}(Time Control: {timeControl / 60}+0)
-                </Text>
-                <ActivityIndicator size="large" color="#4CAF50" />
-                <TouchableOpacity 
-                  style={styles.cancelButton}
-                  onPress={() => {
-                    socket?.emit('cancel_search');
-                    setIsSearching(false);
-                    router.back();
-                  }}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel Search</Text>
-                </TouchableOpacity>
-              </>
-            ) : matchmakingStatus === 'error' ? (
-              <>
-                <Text style={styles.errorText}>Error finding opponent</Text>
-                <TouchableOpacity 
-                  style={styles.retryButton}
-                  onPress={() => {
-                    setSearchTime(0);
-                    socket?.emit('find_game', timeControl);
-                  }}
-                >
-                  <Text style={styles.retryButtonText}>Try Again</Text>
-                </TouchableOpacity>
-              </>
-            ) : null}
-          </View>
-        ) : gamePhase === 'playing' ? (
-          <>
-            {/* ====== Top Player (Opponent) ====== */}
-            <View style={styles.playerInfoTop}>
-              <View style={styles.playerDetails}>
-                <Image 
-                  source={{ uri: 'https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg' }} 
-                  style={styles.playerAvatar} 
-                />
-                <View>
-                  <Text style={styles.playerName}>{opponentInfo.name}</Text>
-                  <Text style={styles.playerRating}>
-  {loadingProfile ? 'Loading...' : 
-   (profile?.ratings?.classical || profile?.rating || 'N/A')}
+        {/* Back button on the left */}
+        {gamePhase === 'playing' && (
+          <TouchableOpacity 
+            style={styles.backButton} 
+            onPress={() => setShowAbortConfirm(true)}
+          >
+            <Image source={backbtn} style={styles.backButton} />
+          </TouchableOpacity>
+        )}
+        
+        {/* Logo and title in the center */}
+        <View style={styles.centerContainer} accessibilityRole="header">
+          <Image 
+            source={logo} 
+            style={styles.logo} 
+            accessibilityLabel="ChessVeda logo"
+          />
+          <Text style={styles.htext}>ChessVeda</Text>
+        </View>
+        
+        {/* Mute button on the right */}
+        <TouchableOpacity 
+          style={styles.muteButton}
+          onPress={() => setIsMuted(!isMuted)}
+          accessibilityLabel={isMuted ? "Unmute sound" : "Mute sound"}
+          accessibilityHint="Toggles game sound on and off"
+        >
+          <Image 
+            source={isMuted ? dspeaker : speaker} 
+            style={[styles.muteButton, isMuted && styles.dspeaker]} 
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* Note: We no longer show the matchmaking UI here directly */}
+      {/* Instead, we'll use the MatchmakingModal component */}
+      
+      {gamePhase === 'playing' ? (
+        <>
+          {/* ====== Top Player (Opponent) ====== */}
+          <View style={styles.playerInfoTop}>
+            <View style={styles.playerDetails}>
+              <Image 
+                source={{ uri: 'https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg' }} 
+                style={styles.playerAvatar} 
+              />
+              <View>
+                <Text style={styles.playerName}>{opponentInfo.name}</Text>
+                <Text style={styles.playerRating}>
+  {typeof opponentInfo.rating === 'number' 
+    ? opponentInfo.rating 
+    : opponentInfo.rating?.standard || 'N/A'}
 </Text>
-                  {/* If you want to show opponent country, ensure `country` is a string or image */}
-                  {opponentInfo.country && typeof opponentInfo.country === 'string' ? (
+                {/* If you want to show opponent country, ensure `country` is a string or image */}
+               {opponentInfo.country && typeof opponentInfo.country === 'string' ? (
   <Text style={styles.playerRating}>{opponentInfo.country}</Text>
 ) : null}
-                </View>
               </View>
-              <View style={styles.timeContainer}>
-                <Text style={styles.timeText}>
-                  {formatTime(playerColor === 'white' ? blackTime : whiteTime)}
+            </View>
+            <View style={styles.timeContainer}>
+              <Text style={styles.timeText}>
+                {formatTime(playerColor === 'white' ? blackTime : whiteTime)}
+              </Text>
+            </View>
+          </View>
+
+          {/* ====== Chess Board ====== */}
+          {gamePhase === 'playing' && game && (
+            <CustomChessBoard
+              fen={boardFen}
+              onMove={handleChessBoardMove}
+              orientation={playerColor}
+              lastMove={moveHistory.length > 0 ? 
+                { from: moveHistory[moveHistory.length - 1].slice(0, 2), 
+                  to: moveHistory[moveHistory.length - 1].slice(2, 4) } : 
+                undefined}
+              customPieces={{
+                wK: require('@/assets/images/king-white.png'),
+                wQ: require('@/assets/images/queen-white.png'),
+                wB: require('@/assets/images/bishop-white.png'),
+                wN: require('@/assets/images/knight-white.png'),
+                wP: require('@/assets/images/white-pawn.png'),
+                wR: require('@/assets/images/rook-white.png'),
+                bK: require('@/assets/images/black-king.png'),
+                bQ: require('@/assets/images/black-queen.png'),
+                bB: require('@/assets/images/black-bishop.png'),
+                bN: require('@/assets/images/black-knight.png'),
+                bP: require('@/assets/images/black-pawn.png'),
+                bR: require('@/assets/images/black-rook.png'),
+              }}
+            />
+          )}
+
+          {/* ====== Bottom Player (You) ====== */}
+          <View style={styles.playerInfoBottom}>
+            <View style={styles.playerDetails}>
+              <Image 
+                source={{ uri: 'https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg' }} 
+                style={styles.playerAvatar} 
+              />
+              <View>
+                <Text style={styles.playerName}>
+                  {profile?.name || 'You'}
+                </Text>
+                {loadingProfile ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.playerRating}>
+  {loadingProfile ? 'Loading...' : 
+   (typeof profile?.rating === 'number' 
+     ? profile.rating 
+     : profile?.rating?.standard ?? 'N/A')}
+</Text>
+                )}
+                <Text style={styles.turnIndicator}>
+                  {game?.turn() === (playerColor === 'white' ? 'w' : 'b') 
+                    ? 'Your turn' 
+                    : 'Waiting...'}
                 </Text>
               </View>
             </View>
-
-            {/* ====== Chess Board ====== */}
-            {gamePhase === 'playing' && game && (
-              <CustomChessBoard
-                fen={boardFen}
-                onMove={handleChessBoardMove}
-                orientation={playerColor}
-                lastMove={moveHistory.length > 0 ? 
-                  { from: moveHistory[moveHistory.length - 1].slice(0, 2), 
-                    to: moveHistory[moveHistory.length - 1].slice(2, 4) } : 
-                  undefined}
-                customPieces={{
-                  wK: require('@/assets/images/king-white.png'),
-                  wQ: require('@/assets/images/queen-white.png'),
-                  wB: require('@/assets/images/bishop-white.png'),
-                  wN: require('@/assets/images/knight-white.png'),
-                  wP: require('@/assets/images/white-pawn.png'),
-                  wR: require('@/assets/images/rook-white.png'),
-                  bK: require('@/assets/images/black-king.png'),
-                  bQ: require('@/assets/images/black-queen.png'),
-                  bB: require('@/assets/images/black-bishop.png'),
-                  bN: require('@/assets/images/black-knight.png'),
-                  bP: require('@/assets/images/black-pawn.png'),
-                  bR: require('@/assets/images/black-rook.png'),
-                }}
-              />
-            )}
-
-            {/* ====== Bottom Player (You) ====== */}
-            <View style={styles.playerInfoBottom}>
-  <View style={styles.playerDetails}>
-    <Image 
-      source={{ uri: 'https://images.pexels.com/photos/30594684/pexels-photo-30594684/free-photo-of-tropical-sunset-with-kite-and-crescent-moon.jpeg' }} 
-      style={styles.playerAvatar} 
-    />
-    <View>
-      <Text style={styles.playerName}>
-        {profile?.name || 'You'}
-      </Text>
-      {loadingProfile ? (
-        <ActivityIndicator size="small" color="#ffffff" />
-      ) : (
-        <Text style={styles.playerRating}>
-          {profile?.ratings?.classical || profile?.rating || 'N/A'}
-        </Text>
-      )}
-      <Text style={styles.turnIndicator}>
-        {game?.turn() === (playerColor === 'white' ? 'w' : 'b') 
-          ? 'Your turn' 
-          : 'Waiting...'}
-      </Text>
-    </View>
-  </View>
-  <View style={styles.timeContainer}>
-    <Text style={styles.timeText}>
-      {formatTime(playerColor === 'white' ? whiteTime : blackTime)}
-    </Text>
-  </View>
-</View>
-
-            {/* ====== Move History ====== */}
-            <View style={styles.controlsContainer}>
-              <MoveHistory moves={moveHistory} />
-            </View>
-          </>
-        ) : (
-          /* ====== GAME OVER PHASE ====== */
-          <View style={styles.resultContainer}>
-            <Text style={styles.resultText}>
-              {gameResult}
-            </Text>
-            <TouchableOpacity 
-              style={styles.returnButton}
-              onPress={() => router.back()}
-            >
-              <Text style={styles.returnButtonText}>Return to Menu</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ====== The NEW Modal With Options ====== */}
-        <Modal
-          transparent={true}
-          visible={showOptionsModal}
-          animationType="slide"
-          onRequestClose={() => setShowOptionsModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Game Options</Text>
-               {/* Close button */}
-               <TouchableOpacity 
-  style={[styles.optionButton]} 
-  onPress={() => setShowOptionsModal(false)}
->
-<Image source={cross} />
-</TouchableOpacity>
-</View>
-              
-              {/* Option: Draw */}
-              <TouchableOpacity 
-  style={[styles.optionButton, drawOffered && styles.disabledButton]} 
-  onPress={handleOfferDraw}
-  disabled={drawOffered}
->
-  <Text style={styles.optionButtonText}>
-    {drawOffered ? "Draw Offered" : "Offer Draw"}
-  </Text>
-</TouchableOpacity>
-
-              {/* Option: Abort (calls handleAbort) */}
-              <TouchableOpacity style={styles.optionButton} onPress={handleAbort}>
-                <Text style={styles.optionButtonText}>Abort</Text>
-              </TouchableOpacity>
-
-              {/* Option: Share Game */}
-              <TouchableOpacity style={styles.optionButton} onPress={() => {
-                Alert.alert("Share Game not implemented yet!");
-              }}>
-                <Text style={styles.optionButtonText}>Share Game</Text>
-              </TouchableOpacity>
-
-              {/* Option: Settings */}
-              <TouchableOpacity style={styles.optionButton} onPress={() => {
-                Alert.alert("Settings not implemented yet!");
-              }}>
-                <Text style={styles.optionButtonText}>Settings</Text>
-              </TouchableOpacity>
-
-              {/* Option: Flip Board */}
-              <TouchableOpacity style={styles.optionButton} onPress={() => {
-                Alert.alert("Flip Board not implemented yet!");
-              }}>
-                <Text style={styles.optionButtonText}>Flip Board</Text>
-              </TouchableOpacity>
-
-              {/* Option: Disable Sounds */}
-             {/* Option: Disable Sounds */}
-<TouchableOpacity 
-  style={styles.optionButton} 
-  onPress={() => {
-    setIsMuted(!isMuted); // This will toggle the sound state
-    setShowOptionsModal(false); // Close the modal after pressing
-  }}
->
-  <Text style={styles.optionButtonText}>
-    {isMuted ? "Enable Sounds" : "Disable Sounds"}
-  </Text>
-</TouchableOpacity>
-
-             
+            <View style={styles.timeContainer}>
+              <Text style={styles.timeText}>
+                {formatTime(playerColor === 'white' ? whiteTime : blackTime)}
+              </Text>
             </View>
           </View>
-        </Modal>
-        <Modal
-      transparent={true}
-      visible={opponentOfferedDraw}
-      animationType="slide"
-      onRequestClose={() => setOpponentOfferedDraw(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Draw Offer</Text>
-          <Text style={styles.drawOfferText}>
-            Your opponent has offered a draw. Do you accept?
+
+          {/* ====== Move History ====== */}
+          <View style={styles.controlsContainer}>
+            <MoveHistory moves={moveHistory} />
+          </View>
+        </>
+      ) : gamePhase === 'gameover' ? (
+        /* ====== GAME OVER PHASE ====== */
+        <View style={styles.resultContainer}>
+          <Text style={styles.resultText}>
+            {gameResult}
           </Text>
-          <View style={styles.drawButtonsContainer}>
-            <TouchableOpacity 
-              style={[
-                styles.drawResponseButton, 
-                styles.acceptButton,
-                selectedOption === 'accept' && styles.selectedButton
-              ]} 
-              onPress={() => {
-                setSelectedOption('accept');
-                handleAcceptDraw();
-              }}
-              activeOpacity={0.7}
-              pressRetentionOffset={{top: 10, left: 10, bottom: 10, right: 10}}
-            >
-              <Text style={styles.drawResponseButtonText}>Accept</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[
-                styles.drawResponseButton, 
-                styles.declineButton,
-                selectedOption === 'decline' && styles.selectedButton
-              ]} 
-              onPress={() => {
-                setSelectedOption('decline');
-                handleDeclineDraw();
-              }}
-              activeOpacity={0.7}
-              pressRetentionOffset={{top: 10, left: 10, bottom: 10, right: 10}}
-            >
-              <Text style={styles.drawResponseButtonText}>Decline</Text>
-            </TouchableOpacity>
-          </View>
+          {/* <TouchableOpacity 
+            style={styles.returnButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.returnButtonText}>Return to Menu</Text>
+          </TouchableOpacity> */}
+        </View>
+      ) : (
+        /* Empty view when in matchmaking phase, since we're using modal */
+        <View style={styles.emptyContainer}>
+          <Text style={styles.waitingText}>Preparing game...</Text>
+        </View>
+      )}
+
+      {/* ====== Modals ====== */}
+      {/* Matchmaking Modal */}
+      <MatchmakingModal
+        visible={gamePhase === 'matchmaking'}
+        matchmakingStatus={matchmakingStatus}
+        searchTime={searchTime}
+        timeControl={timeControl}
+        onCancel={handleCancelMatchmaking}
+        onRetry={handleRetryMatchmaking}
+        formatTime={formatTime}
+      />
+
+      {/* Other Modals */}
+      <OptionsModal
+        visible={showOptionsModal}
+        onClose={() => setShowOptionsModal(false)}
+        onOfferDraw={handleOfferDraw}
+        onAbort={handleAbort}
+        drawOffered={drawOffered}
+        isMuted={isMuted}
+        setIsMuted={setIsMuted}
+        cross={cross}
+      />
+      
+      <DrawOfferModal
+        visible={opponentOfferedDraw}
+        onAccept={handleAcceptDraw}
+        onDecline={handleDeclineDraw}
+        onClose={() => setOpponentOfferedDraw(false)}
+        selectedOption={selectedOption}
+        setSelectedOption={setSelectedOption}
+      />
+
+      <AbortConfirmModal
+        visible={showAbortConfirm}
+        onConfirm={() => {
+          setShowAbortConfirm(false);
+          handleAbort();
+        }}
+        onCancel={() => setShowAbortConfirm(false)}
+      />
+      
+      <GameResultModal
+        visible={showResultModal}
+        onClose={() => {
+          setShowResultModal(false);
+          router.back(); // Navigate back to menu when closing the result modal
+        }}
+        resultType={resultType}
+        reason={resultReason as any}
+        ratingChange={resultRatingChange}
+        newRating={resultNewRating}
+        playerName={profile?.name || 'You'}
+        opponentName={opponentInfo.name}
+      />
+
+      <View style={styles.footer}>
+        <View style={styles.footerEle}>
+          <TouchableOpacity 
+            style={styles.footerButton}  
+            onPress={() => setShowOptionsModal(true)}
+            disabled={gamePhase !== 'playing'}
+            accessibilityLabel="Back button"
+            accessibilityHint="Opens game options menu"
+          >
+            <Image source={menu} style={styles.footerIcon} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.footerButton}>
+            <Image source={analysis} style={styles.footerIcon} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.footerButton}>
+            <Image source={left} style={styles.footerIcon} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.footerButton}>
+            <Image source={right} style={styles.footerIcon} />
+          </TouchableOpacity>
         </View>
       </View>
-    </Modal>
-
-
-    <Modal
-  animationType="fade"
-  transparent={true}
-  visible={showAbortConfirm}
-  onRequestClose={() => setShowAbortConfirm(false)}
->
-  <View style={{
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center'
-  }}>
-    <View style={{
-      backgroundColor: '#292929',
-      borderRadius: 12,
-      padding: 20,
-      width: '80%',
-      alignItems: 'center'
-    }}>
-      <Text style={{ fontSize: 16, fontWeight: 500, marginBottom: 16, color:'#fff' }}>
-        Do you want to resign the game?
-      </Text>
-      <View style={{ flexDirection: 'row', gap: 20 }}>
-        <TouchableOpacity
-          onPress={() => {
-            setShowAbortConfirm(false);
-            handleAbort(); // Trigger abort logic here
-          }}
-          style={{ backgroundColor: '#3D3D3D', padding: 10, borderRadius: 8 }}
-        >
-          <Text style={{ color: 'white' }}>Yes</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setShowAbortConfirm(false)}
-          style={{ backgroundColor: '#3D3D3D', padding: 10, borderRadius: 8 }}
-        >
-          <Text style={{ color: 'white' }}>No</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </View>
-</Modal>
-
-    <View style={styles.footer}>
-  <View style={styles.footerEle}>
-    <TouchableOpacity style={styles.footerButton}  onPress={() => setShowOptionsModal(true)}
-      disabled={gamePhase !== 'playing'}
-      accessibilityLabel="Back button"
-      accessibilityHint="Opens game options menu">
-      <Image source={menu} style={styles.footerIcon} />
-    </TouchableOpacity>
-    
-    <TouchableOpacity style={styles.footerButton}>
-      <Image source={analysis} style={styles.footerIcon} />
-    </TouchableOpacity>
-    
-    <TouchableOpacity style={styles.footerButton}>
-      <Image source={left} style={styles.footerIcon} />
-    </TouchableOpacity>
-    
-    <TouchableOpacity style={styles.footerButton}>
-      <Image source={right} style={styles.footerIcon} />
-    </TouchableOpacity>
-  </View>
-</View>
-      </SafeAreaView>
-    </GestureHandlerRootView>
+    </SafeAreaView>
+  </GestureHandlerRootView>
   );
 };
+
 
 
 const styles = StyleSheet.create({
@@ -1144,43 +1078,13 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
-  // modalOverlay: {
-  //   flex: 1,
-  //   backgroundColor: 'rgba(0,0,0,0.5)',
-  //   justifyContent: 'center',
-  //   alignItems: 'center',
-  // },
-  modalContainer: {
-    backgroundColor: '#2C2C2C',
-    borderRadius: 10,
-    padding: 20,
-    width: '80%',
-  },
-  modalText: {
-    color: 'white',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  modalButton: {
-    flex: 1,
-    padding: 15,
-    margin: 5,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
+ 
+  
   confirmButton: {
     backgroundColor: '#FF4444',
   },
   cancelButton1: {
     backgroundColor: '#555',
-  },
-  modalButtonText: {
-    color: 'white',
-    fontWeight: '600',
   },
   turnIndicator: {
     color: '#FFFFFF',
@@ -1250,92 +1154,9 @@ const styles = StyleSheet.create({
     color:'#fff',
     marginRight: 10,
   },
- 
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)', 
-    justifyContent: 'flex-end', 
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '100%',
-    height: 406,
-    backgroundColor: '#292929',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    padding: 16,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between'
-  },
-  modalTitle: {
-    color: '#fff',
-    fontSize: 20,
-    marginTop: 12,
-    fontWeight: '400'
-  },
-  drawOfferText: {
-    fontSize: 16,
-    color: 'white',
-    marginVertical: 20,
-  },
-  drawButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    width: '100%',
-    marginTop: 10,
-  },
-  drawResponseButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 5,
-    borderWidth: 0,  // Default: no border
-    minWidth: 100,
-    alignItems: 'center',
-  },
   pressedButton: {
     borderWidth: 1,
     borderColor: '#ffffff',  // White border only when pressed
-  },
-  acceptButton: {
-    backgroundColor: '#3D3D3D',
-    height:60,
-    width:100,
-  },
-  declineButton: {
-    backgroundColor: '#3D3D3D',
-    height:60,
-    width:100
-  },
-  selectedButton: {
-    borderWidth: 1,
-    borderColor: '#ffffff',  // White border for the selected button
-  },
-  drawResponseButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 500,
-    textAlign: 'center',
-    marginTop:8
-  },
-  cross:{
-   
-    color:'#fff'
-  },
-  optionButtonText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  optionButton: {
-    backgroundColor: '#333',
-    paddingVertical: 12,
-
-    borderRadius: 6,
-    marginVertical: 5,
-  },
-  disabledButton: {
-    opacity: 0.5,
   },
   footer: {
     height: 63,
@@ -1362,8 +1183,21 @@ const styles = StyleSheet.create({
     height: 24,
     resizeMode: 'contain',
   },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  waitingText: {
+    color: '#888',
+    fontSize: 16,
+  },
+  
 });
-
+const additionalStyles = {
+ 
+  
+};
 export default function GameScreenWrapper() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -1371,7 +1205,6 @@ export default function GameScreenWrapper() {
     </GestureHandlerRootView>
   );
 }
-
 
 
 
